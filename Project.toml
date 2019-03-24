@@ -5,6 +5,7 @@ version = "0.0.0"
 
 [deps]
 Clp = "e2554f3b-3117-50c0-817c-e040a3ddf72d"
+LinQuadOptInterface = "f8899e07-120b-5979-ab1d-7b97bb9e1a48"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"

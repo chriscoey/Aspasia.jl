@@ -8,17 +8,54 @@ and oracles for polyhedral approximation
 const rt2 = sqrt(2)
 const rt2i = inv(rt2)
 
+# lower triangle mat to vec
+function mat_to_vec!(vec::Vector{Float64}, mat::AbstractMatrix{Float64})
+    k = 1
+    m = size(mat, 1)
+    for i in 1:m, j in 1:i # fill from lower triangle
+        vec[k] = mat[i, j]
+        k += 1
+    end
+    return vec
+end
+
+# vec to lower triangle mat
+function vec_to_mat!(mat::AbstractMatrix{Float64}, vec::Vector{Float64})
+    k = 1
+    m = size(mat, 1)
+    for i in 1:m, j in 1:i # fill lower triangle
+        mat[i, j] = vec[k]
+        k += 1
+    end
+    return mat
+end
+
 #=
 PSD cone
 cuts are <V*V^T, X> for eigenvectors V corresponding to negative eigenvalues of matrix point X
 =#
-function get_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeSquare)
+function get_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTriangle)
     L = cone.side_dimension
-    X = Symmetric(reshape(x, L, L))
+    X = Matrix{Float64}(undef, L, L)
+    vec_to_mat!(X, x)
 
-    F = eigen!(X, 1:5) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+    F = eigen!(Symmetric(X, :L), 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
-    return [reshape(F.vectors[:, k] * F.vectors[:, k]', length(x)) for k in eachindex(F.values) if F.values[k] < 1e-5] # TODO syrk
+    cuts = Vector{Float64}[]
+    for k in eachindex(F.values)
+        if F.values[k] >= 1e-5
+            continue
+        end
+        V = F.vectors[:, k]
+        W = V * V'
+        cut = similar(x)
+        mat_to_vec!(cut, W) # TODO syrk
+        push!(cuts, cut)
+
+        @show dot(x, cut)
+    end
+
+    return cuts
 end
 
 #=
@@ -48,7 +85,7 @@ function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
         #     X[i, j] = sum(Wt[u, i] * Wt[u, j] * x[u] for u in eachindex(x))
         # end
 
-        F = eigen!(X, 1:5) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+        F = eigen!(X, 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
         for k in eachindex(F.values)
             if F.values[k] >= 1e-5
@@ -107,7 +144,7 @@ function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpMatCone)
             i0 += L
         end
 
-        F = eigen!(Symmetric(X, :L), 1:5) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+        F = eigen!(Symmetric(X, :L), 1:min(RL, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
         for k in eachindex(F.values)
             if F.values[k] >= 1e-5

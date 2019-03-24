@@ -47,9 +47,11 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[LinQuadOptInterface]]
 deps = ["Compat", "MathOptInterface"]
-git-tree-sha1 = "d6692a09d0424e34c884cd819b8ed47943eefc20"
+git-tree-sha1 = "82df2578b5db25c2563b456fc529a2560d8cb700"
+repo-rev = "master"
+repo-url = "https://github.com/JuliaOpt/LinQuadOptInterface.jl.git"
 uuid = "f8899e07-120b-5979-ab1d-7b97bb9e1a48"
-version = "0.6.0"
+version = "0.6.0+"
 
 [[LinearAlgebra]]
 deps = ["Libdl"]
@@ -65,8 +67,10 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 [[MathOptInterface]]
 deps = ["Compat", "Unicode"]
 git-tree-sha1 = "5d3de69c9220610d0336ab45d3eb8b6ac7a7c807"
+repo-rev = "master"
+repo-url = "https://github.com/JuliaOpt/MathOptInterface.jl.git"
 uuid = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
-version = "0.8.4"
+version = "0.8.4+"
 
 [[MathProgBase]]
 deps = ["Compat"]

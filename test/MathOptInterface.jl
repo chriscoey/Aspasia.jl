@@ -13,7 +13,7 @@ MOIU.@model(AspasiaModelData,
     (MOI.EqualTo, MOI.GreaterThan, MOI.LessThan, MOI.Interval),
     (MOI.Reals, MOI.Zeros, MOI.Nonnegatives, MOI.Nonpositives,
         # MOI.SecondOrderCone, MOI.RotatedSecondOrderCone,
-        MOI.PositiveSemidefiniteConeSquare,
+        MOI.PositiveSemidefiniteConeTriangle,
         # MOI.ExponentialCone, MOI.GeometricMeanCone, MOI.LogDetConeTriangle
         ),
     (), # PowerCone
@@ -41,12 +41,13 @@ unit_exclude = [
     ]
 
 conic_exclude = String[
-    # "lin",
+    "lin",
     "soc",
     "rsoc",
     "exp",
     "geomean",
     # "sdp",
+    "psds",
     "logdet",
     "rootdet",
     # TODO MOI bridges don't support square logdet or rootdet
@@ -73,7 +74,10 @@ function test_moi(verbose, approx_solver)
     #     MOIT.contlineartest(optimizer, config)
     # end
     @testset "conic tests" begin
-        MOIT.contconictest(MOIB.SquarePSD{Float64}(MOIB.RootDet{Float64}(optimizer)), config, conic_exclude)
+        MOIT.contconictest(
+            MOIB.SquarePSD{Float64}(
+            MOIB.SOCtoPSD{Float64}(
+            optimizer)), config, conic_exclude)
     end
     return
 end

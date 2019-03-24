@@ -6,9 +6,12 @@ functions and caches for polyhedral approximation algorithms
 
 module Solvers
 
+using Aspasia
 using Printf
+using LinearAlgebra
 import MathOptInterface
 const MOI = MathOptInterface
+const MOIU = MathOptInterface.Utilities
 
 abstract type Solver end
 

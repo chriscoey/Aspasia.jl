@@ -13,7 +13,8 @@ mutable struct SepCutsSolver <: Solver
     time_limit::Float64
 
     approx_model::MOI.ModelLike
-    constraint_idxs::Vector{MOI.ConstraintIndex}
+    con_sets
+    con_funs
 
     status::Symbol
     num_iters::Int
@@ -21,8 +22,8 @@ mutable struct SepCutsSolver <: Solver
 
     function SepCutsSolver(
         approx_model::MOI.ModelLike,
-        constraint_idxs::Vector{MOI.ConstraintIndex},
-        ;
+        con_sets,
+        con_funs;
         verbose::Bool = true,
         tol_rel_opt = 1e-6,
         tol_abs_opt = 1e-7,
@@ -40,7 +41,8 @@ mutable struct SepCutsSolver <: Solver
         solver.time_limit = time_limit
 
         solver.approx_model = approx_model
-        solver.constraint_idxs = constraint_idxs
+        solver.con_sets = con_sets
+        solver.con_funs = con_funs
 
         solver.status = :SolveNotCalled
         solver.num_iters = 0
@@ -54,6 +56,8 @@ function solve(solver::SepCutsSolver)
     solver.status = :SolveCalled
     start_time = time()
 
+    # TODO add initial fixed OA cuts eg variable bounds
+    
     # TODO for now assuming unbounded, but if get rays then need to cut them off
 
     # @printf("\n%5s %12s %12s %9s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
@@ -71,10 +75,16 @@ function solve(solver::SepCutsSolver)
         @show approx_model_status
         if approx_model_status == MOI.OPTIMAL
             # TODO update obj bounds?
+        elseif approx_model_status == MOI.DUAL_INFEASIBLE
+            # TODO need to cut off the ray
         elseif approx_model_status == MOI.INFEASIBLE
             solver.verbose && println("infeasibility detected; terminating")
+            solver.status = :PrimalInfeasible
+            break
         elseif approx_model_status == MOI.INFEASIBLE_OR_UNBOUNDED
             solver.verbose && println("infeasibility or unboundedness detected; terminating")
+            solver.status = :ApproxSolverStatusNotHandled
+            break
         else
             error("OA solver status not handled")
         end
@@ -103,17 +113,22 @@ function solve(solver::SepCutsSolver)
         end
 
         is_cut_off = false
-        for k in eachindex(solver.constraint_idxs)
-            con_idx = constraint_idxs[k]
-            func_val = MOI.get(solver.approx_model, MOI.ConstraintPrimal(), con_idx)
-            con_set = MOI.get(solver.approx_model, MOI.ConstraintSet(), con_idx)
-            cuts = check_feas_get_cuts(func_val, con_set)
+        for k in eachindex(solver.con_sets)
+            # TODO get the variable values before
+            # TODO evaluate function k using sparse matrix constructed earlier
+            # TODO derive cuts
+            # TODO build new SAF for each using sparse matrix cut
+
+            con_set = solver.con_sets[k]
+            con_fun = solver.con_funs[k]
+            # TODO do not include constant if primal solution is a ray
+            func_val = MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi), con_fun)
+            cuts = Aspasia.get_cuts(func_val, con_set)
             @show length(cuts)
             if !isempty(cuts)
-                func = MOI.get(solver.approx_model, MOI.ConstraintFunction(), con_idx)
                 is_cut_off = true
                 for cut in cuts
-                    cut_expr = dot(cut, func)
+                    cut_expr = dot(cut, con_fun)
                     cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
                     # TODO store cut_ref with the constraint so can access values/duals
                 end

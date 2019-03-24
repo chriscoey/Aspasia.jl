@@ -15,7 +15,8 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     approx_solver
 
     approx_model::MOI.ModelLike
-    constraint_idxs::Vector{MOI.ConstraintIndex}
+    con_sets
+    con_funs
 
     status::Symbol
     solve_time::Float64
@@ -119,30 +120,48 @@ function MOI.copy_to(
     MOI.set(approx_model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
     # constraints
-    constraint_idxs = MOI.ConstraintIndex[]
+    con_sets = MOI.AbstractVectorSet[]
+    # con_funs = SparseMatrixCSC{Float64, Int}[]
+    con_funs = MOI.AbstractVectorFunction[]
+
+    i = 1
     for (F, S) in MOI.get(src, MOI.ListOfConstraints())
         if S in linear_sets
             # equality and orthant cone constraints
             MOIU.copyconstraints!(approx_model, src, false, idx_map, F, S)
         else
             # constraints requiring polyhedral approximation
-            # TODO decide whether to add new variable vector equal to VAF, so cuts are only on variables
             for ci in MOI.get(src, MOI.ListOfConstraintIndices{F, S}())
-                push!(constraint_idxs, ci)
-                idx_map[ci] = MOI.ConstraintIndex{F, S}(length(constraint_idxs))
+                si = MOI.get(src, MOI.ConstraintSet(), ci)
+                fi = MOI.get(src, MOI.ConstraintFunction(), ci)
+                push!(con_sets, si)
+                push!(con_funs, fi)
+
+                # m = MOI.dimension(si)
+                #
+                # if F == MOI.VectorOfVariables
+                #     con_fun = sparse(, m, n)
+                # else
+                #     @assert F == MOI.VectorAffineFunction{Float64}
+                #
+                # end
+
+                idx_map[ci] = MOI.ConstraintIndex{F, S}(i)
+                i += 1
             end
         end
     end
 
     opt.approx_model = approx_model
-    opt.constraint_idxs = constraint_idxs
+    opt.con_sets = con_sets
+    opt.con_funs = con_funs
     opt.status = :Loaded
 
     return idx_map
 end
 
 function MOI.optimize!(opt::Optimizer)
-    solver = Solvers.SepCutsSolver(opt.approx_model, opt.constraint_idxs) # TODO tols
+    solver = Solvers.SepCutsSolver(opt.approx_model, opt.con_sets, opt.con_funs) # TODO tols
     Solvers.solve(solver)
 
     opt.status = Solvers.get_status(solver)
