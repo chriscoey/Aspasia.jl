@@ -11,6 +11,7 @@ using LinearAlgebra
 using SparseArrays
 import MathOptInterface
 const MOI = MathOptInterface
+const MOIU = MathOptInterface.Utilities
 
 include("MathOptInterface/cones.jl")
 include("MathOptInterface/wrapper.jl")

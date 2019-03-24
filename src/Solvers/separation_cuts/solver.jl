@@ -103,7 +103,7 @@ function solve(solver::SepCutsSolver)
         end
 
         is_cut_off = false
-        for k in eachindex(solver.cones)
+        for k in eachindex(solver.constraint_idxs)
             con_idx = constraint_idxs[k]
             func_val = MOI.get(solver.approx_model, MOI.ConstraintPrimal(), con_idx)
             con_set = MOI.get(solver.approx_model, MOI.ConstraintSet(), con_idx)

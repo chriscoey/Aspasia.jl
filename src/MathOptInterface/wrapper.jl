@@ -12,7 +12,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     max_iters::Int
     time_limit::Float64
 
-    approx_solver::MOI.AbstractOptimizer
+    approx_solver
 
     approx_model::MOI.ModelLike
     constraint_idxs::Vector{MOI.ConstraintIndex}
@@ -22,9 +22,9 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     primal_obj::Float64
     dual_obj::Float64
 
-    function Optimizer(approx_solver::MOI.AbstractOptimizer, verbose::Bool, max_iters::Int, time_limit::Float64, tol_rel_opt::Float64, tol_abs_opt::Float64, tol_feas::Float64)
+    function Optimizer(approx_solver, verbose::Bool, max_iters::Int, time_limit::Float64, tol_rel_opt::Float64, tol_abs_opt::Float64, tol_feas::Float64)
         opt = new()
-        opt.approx_solver
+        opt.approx_solver = approx_solver
         opt.verbose = verbose
         opt.max_iters = max_iters
         opt.time_limit = time_limit
@@ -37,7 +37,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
 end
 
 Optimizer(
-    approx_solver::MOI.AbstractOptimizer;
+    approx_solver;
     verbose::Bool = false,
     max_iters::Int = 500,
     time_limit::Float64 = 3.6e3, # TODO should be Inf
@@ -88,10 +88,7 @@ SupportedSets = Union{
 
 MOI.supports_constraint(::Optimizer, ::Type{<:SupportedFuns}, ::Type{<:SupportedSets}) = true
 
-linear_scalar_funs = (MOI.SingleVariable, MOI.ScalarAffineFunction{Float64})
-linear_scalar_sets = (MOI.EqualTo{Float64}, MOI.GreaterThan{Float64}, MOI.LessThan{Float64}, MOI.Interval{Float64})
-linear_vector_funs = (MOI.VectorOfVariables, MOI.VectorAffineFunction{Float64})
-linear_vector_sets = (MOI.Zeros, MOI.Nonnegatives, MOI.Nonpositives)
+linear_sets = (MOI.EqualTo{Float64}, MOI.GreaterThan{Float64}, MOI.LessThan{Float64}, MOI.Interval{Float64}, MOI.Zeros, MOI.Nonnegatives, MOI.Nonpositives)
 
 # build polyhedral approximation MOI model and list of cone objects
 function MOI.copy_to(
@@ -101,7 +98,7 @@ function MOI.copy_to(
     warn_attributes::Bool = true,
     )
     @assert !copy_names
-    idx_map = Dict{MOI.Index, MOI.Index}()
+    idx_map = MOIU.IndexMap()
 
     approx_model = opt.approx_solver()
 
@@ -122,31 +119,19 @@ function MOI.copy_to(
     MOI.set(approx_model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
     # constraints
-    get_src_cons(F, S) = MOI.get(src, MOI.ListOfConstraintIndices{F, S}())
-    get_con_fun(con_idx) = MOI.get(src, MOI.ConstraintFunction(), con_idx)
-    get_con_set(con_idx) = MOI.get(src, MOI.ConstraintSet(), con_idx)
-
-    # equality and orthant cone constraints
-    function add_linear_constraints(F, S)
-        for ci in get_src_cons(F, S)
-            old_fun = get_con_fun(ci)
-            new_fun = # TODO .... # TODO need the function to use new variable indices
-            idx_map[ci] = MOI.add_constraint(approx_model, new_fun, get_con_set(ci))
-        end
-    end
-    for F in linear_scalar_funs, S in linear_scalar_sets # scalar constraints
-        add_linear_constraints(F, S)
-    end
-    for F in linear_vector_funs, S in linear_vector_sets # vector constraints
-        add_linear_constraints(F, S)
-    end
-
-    # nonpolyhedral cone constraints
     constraint_idxs = MOI.ConstraintIndex[]
-    # TODO decide whether to add new variable vector equal to VAF, so cuts are only on variables
-    for F in linear_vector_funs, S in ApproxCones, ci in get_src_cons(F, S)
-        push!(constraint_idxs)
-        idx_map[ci] = MOI.ConstraintIndex{F, S}(length(constraint_idxs))
+    for (F, S) in MOI.get(src, MOI.ListOfConstraints())
+        if S in linear_sets
+            # equality and orthant cone constraints
+            MOIU.copyconstraints!(approx_model, src, false, idx_map, F, S)
+        else
+            # constraints requiring polyhedral approximation
+            # TODO decide whether to add new variable vector equal to VAF, so cuts are only on variables
+            for ci in MOI.get(src, MOI.ListOfConstraintIndices{F, S}())
+                push!(constraint_idxs, ci)
+                idx_map[ci] = MOI.ConstraintIndex{F, S}(length(constraint_idxs))
+            end
+        end
     end
 
     opt.approx_model = approx_model
@@ -157,13 +142,13 @@ function MOI.copy_to(
 end
 
 function MOI.optimize!(opt::Optimizer)
-    solver = Solvers.SepCutsSolver(opt.approx_model, opt.cones) # TODO tols
+    solver = Solvers.SepCutsSolver(opt.approx_model, opt.constraint_idxs) # TODO tols
     Solvers.solve(solver)
 
     opt.status = Solvers.get_status(solver)
     opt.solve_time = Solvers.get_solve_time(solver)
-    opt.primal_obj = Solvers.get_primal_obj(solver)
-    opt.dual_obj = Solvers.get_dual_obj(solver)
+    # opt.primal_obj = Solvers.get_primal_obj(solver)
+    # opt.dual_obj = Solvers.get_dual_obj(solver)
 
     return
 end
