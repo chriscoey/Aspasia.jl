@@ -7,8 +7,8 @@ functions and caches for polyhedral approximation algorithms
 module Solvers
 
 using Printf
-
-import Aspasia.Cones
+import MathOptInterface
+const MOI = MathOptInterface
 
 abstract type Solver end
 

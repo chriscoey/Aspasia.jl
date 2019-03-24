@@ -13,8 +13,7 @@ mutable struct SepCutsSolver <: Solver
     time_limit::Float64
 
     approx_model::MOI.ModelLike
-    funcs::Vector{Union{MOI.VectorOfVariables, MOI.VectorAffineFunction}}
-    cones::Vector{Cones.Cone}
+    constraint_idxs::Vector{MOI.ConstraintIndex}
 
     status::Symbol
     num_iters::Int
@@ -22,8 +21,7 @@ mutable struct SepCutsSolver <: Solver
 
     function SepCutsSolver(
         approx_model::MOI.ModelLike,
-        funcs::Vector{Union{MOI.VectorOfVariables, MOI.VectorAffineFunction}}
-        cones::Vector{Cones.Cone},
+        constraint_idxs::Vector{MOI.ConstraintIndex},
         ;
         verbose::Bool = true,
         tol_rel_opt = 1e-6,
@@ -42,8 +40,7 @@ mutable struct SepCutsSolver <: Solver
         solver.time_limit = time_limit
 
         solver.approx_model = approx_model
-        solver.funcs = funcs
-        solver.cones = cones
+        solver.constraint_idxs = constraint_idxs
 
         solver.status = :SolveNotCalled
         solver.num_iters = 0
@@ -107,15 +104,17 @@ function solve(solver::SepCutsSolver)
 
         is_cut_off = false
         for k in eachindex(solver.cones)
-            func_val = MOI.get(solver.approx_model, MOI.ConstraintPrimal(), MOI.ConstraintIndex{F, S}) # TODO fix
-            cone = solver.cones[k]
-            cuts = check_feas_get_cuts(cone)
+            con_idx = constraint_idxs[k]
+            func_val = MOI.get(solver.approx_model, MOI.ConstraintPrimal(), con_idx)
+            con_set = MOI.get(solver.approx_model, MOI.ConstraintSet(), con_idx)
+            cuts = check_feas_get_cuts(func_val, con_set)
             @show length(cuts)
             if !isempty(cuts)
+                func = MOI.get(solver.approx_model, MOI.ConstraintFunction(), con_idx)
                 is_cut_off = true
                 for cut in cuts
-                    affexpr = ... # TODO
-                    cut_ref = MOI.add_constraint(solver.approx_model, cut_func, MOI.GreaterThan(0.0))
+                    cut_expr = dot(cut, func)
+                    cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
                     # TODO store cut_ref with the constraint so can access values/duals
                 end
             end

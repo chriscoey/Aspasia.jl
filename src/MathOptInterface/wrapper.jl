@@ -15,7 +15,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     approx_solver::MOI.AbstractOptimizer
 
     approx_model::MOI.ModelLike
-    cones::Vector{Cones.Cone}
+    constraint_idxs::Vector{MOI.ConstraintIndex}
 
     status::Symbol
     solve_time::Float64
@@ -55,9 +55,21 @@ MOI.empty!(opt::Optimizer) = (opt.status = :NotLoaded) # TODO empty the data and
 MOI.supports(::Optimizer, ::Union{
     MOI.ObjectiveSense,
     MOI.ObjectiveFunction{MOI.SingleVariable},
-    MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}},
-    MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}}},
-    ) = true
+    MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}},
+    MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}},
+    }) = true
+
+ApproxCones = ( # cones to use polyhedral approximation on
+    # MOI.SecondOrderCone,
+    # MOI.RotatedSecondOrderCone,
+    # MOI.ExponentialCone,
+    # MOI.PowerCone{Float64},
+    # MOI.GeometricMeanCone,
+    MOI.PositiveSemidefiniteConeTriangle,
+    # MOI.LogDetConeTriangle,
+    WSOSPolyInterpCone,
+    WSOSPolyInterpMatCone,
+    )
 
 # TODO don't restrict to Float64 type
 # TODO allow SOC/quadratic constraints if approx solver allows specifying?
@@ -71,7 +83,7 @@ SupportedSets = Union{
     MOI.GreaterThan{Float64}, MOI.Nonnegatives,
     MOI.LessThan{Float64}, MOI.Nonpositives,
     MOI.Interval{Float64},
-    MOIOtherCones...
+    ApproxCones...
     }
 
 MOI.supports_constraint(::Optimizer, ::Type{<:SupportedFuns}, ::Type{<:SupportedSets}) = true
@@ -118,7 +130,7 @@ function MOI.copy_to(
     function add_linear_constraints(F, S)
         for ci in get_src_cons(F, S)
             old_fun = get_con_fun(ci)
-            new_fun = .... # TODO need the function to use new variable indices
+            new_fun = # TODO .... # TODO need the function to use new variable indices
             idx_map[ci] = MOI.add_constraint(approx_model, new_fun, get_con_set(ci))
         end
     end
@@ -130,37 +142,15 @@ function MOI.copy_to(
     end
 
     # nonpolyhedral cone constraints
-    cones = Cones.Cone[]
-    num_cones = 0
+    constraint_idxs = MOI.ConstraintIndex[]
     # TODO decide whether to add new variable vector equal to VAF, so cuts are only on variables
-    for F in linear_vector_funs, S in MOIOtherCones, ci in get_src_cons(F, S)
-        num_cones += 1
-        idx_map[ci] = MOI.ConstraintIndex{F, S}(num_cones)
-
-        # TODO
-
-        # push!(constr_offset_cone, q)
-        # fi = get_con_fun(ci)
-        # si = get_con_set(ci)
-        # dim = MOI.output_dimension(fi)
-        # if F == MOI.VectorOfVariables
-        #     append!(JG, idx_map[vj].value for vj in fi.variables)
-        #     (IGi, VGi, conei) = build_var_cone(fi, si, dim, q)
-        # else
-        #     append!(JG, idx_map[vt.scalar_term.variable_index].value for vt in fi.terms)
-        #     (IGi, VGi, Ihi, Vhi, conei) = build_constr_cone(fi, si, dim, q)
-        #     append!(Ih, Ihi)
-        #     append!(Vh, Vhi)
-        # end
-        # append!(IG, IGi)
-        # append!(VG, VGi)
-        # push!(cones, conei)
-        # push!(cone_idxs, (q + 1):(q + dim))
-        # q += dim
+    for F in linear_vector_funs, S in ApproxCones, ci in get_src_cons(F, S)
+        push!(constraint_idxs)
+        idx_map[ci] = MOI.ConstraintIndex{F, S}(length(constraint_idxs))
     end
 
     opt.approx_model = approx_model
-    opt.cones = cones
+    opt.constraint_idxs = constraint_idxs
     opt.status = :Loaded
 
     return idx_map
