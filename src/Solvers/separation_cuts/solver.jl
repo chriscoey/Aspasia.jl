@@ -1,13 +1,10 @@
 #=
 Copyright 2019, Chris Coey and contributors
 
-algorithm for mixed-integer conic outer approximation with K* cuts
+algorithm for mixed-integer conic outer approximation with separation K* cuts (no conic subproblem)
 =#
 
 mutable struct SepCutsSolver <: Solver
-    oa_model::JuMP.Model
-    cones::Vector{Cones.Cone}
-
     verbose::Bool
     tol_rel_opt::Float64
     tol_abs_opt::Float64
@@ -15,12 +12,15 @@ mutable struct SepCutsSolver <: Solver
     max_iters::Int
     time_limit::Float64
 
+    approx_model::MOI.ModelLike
+    cones::Vector{Cones.Cone}
+
     status::Symbol
     num_iters::Int
     solve_time::Float64
 
     function SepCutsSolver(
-        oa_model::JuMP.Model,
+        approx_model::MOI.ModelLike,
         cones::Vector{Cones.Cone},
         ;
         verbose::Bool = true,
@@ -32,14 +32,15 @@ mutable struct SepCutsSolver <: Solver
         )
         solver = new()
 
-        solver.oa_model = oa_model
-
         solver.verbose = verbose
         solver.tol_rel_opt = tol_rel_opt
         solver.tol_abs_opt = tol_abs_opt
         solver.tol_feas = tol_feas
         solver.max_iters = max_iters
         solver.time_limit = time_limit
+
+        solver.approx_model = approx_model
+        solver.cones = cones
 
         solver.status = :SolveNotCalled
         solver.num_iters = 0
@@ -65,14 +66,14 @@ function solve(solver::SepCutsSolver)
     while true
         @show solver.num_iters
 
-        JuMP.optimize!(solver.oa_model)
-        oa_model_status = JuMP.termination_status(solver.oa_model)
-        @show oa_model_status
-        if oa_model_status == JuMP.OPTIMAL
+        MOI.optimize!(solver.approx_model)
+        approx_model_status = MOI.get(solver.approx_model, MOI.TerminationStatus())
+        @show approx_model_status
+        if approx_model_status == MOI.OPTIMAL
             # TODO update obj bounds?
-        elseif oa_model_status == JuMP.INFEASIBLE
+        elseif approx_model_status == MOI.INFEASIBLE
             solver.verbose && println("infeasibility detected; terminating")
-        elseif oa_model_status == JuMP.INFEASIBLE_OR_UNBOUNDED
+        elseif approx_model_status == MOI.INFEASIBLE_OR_UNBOUNDED
             solver.verbose && println("infeasibility or unboundedness detected; terminating")
         else
             error("OA solver status not handled")
@@ -108,8 +109,9 @@ function solve(solver::SepCutsSolver)
             if !isempty(cuts)
                 is_cut_off = true
                 for cut in cuts
-                    @show JuMP.value(cut)
-                    JuMP.@constraint(solver.model, cut >= 0.0)
+                    affexpr = ... # TODO
+                    cut_ref = MOI.add_constraint(solver.model, cut_func, MOI.GreaterThan(0.0))
+                    # TODO store cut_ref with the constraint so can access values/duals
                 end
             end
         end

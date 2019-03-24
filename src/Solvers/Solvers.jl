@@ -7,7 +7,6 @@ functions and caches for polyhedral approximation algorithms
 module Solvers
 
 using Printf
-import JuMP
 
 import Aspasia.Cones
 

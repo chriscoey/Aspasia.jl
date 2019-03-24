@@ -14,7 +14,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
 
     approx_solver::MOI.AbstractOptimizer
 
-    approx_opt::MOI.AbstractOptimizer
+    approx_model::MOI.ModelLike
     cones::Vector{Cones.Cone}
 
     status::Symbol
@@ -91,11 +91,11 @@ function MOI.copy_to(
     @assert !copy_names
     idx_map = Dict{MOI.Index, MOI.Index}()
 
-    approx_opt = opt.approx_solver()
+    approx_model = opt.approx_solver()
 
     # variables
     n = MOI.get(src, MOI.NumberOfVariables()) # columns of A
-    x = MOI.add_variables(approx_opt, n)
+    x = MOI.add_variables(approx_model, n)
     for (vj, xj) in zip(MOI.get(src, MOI.ListOfVariableIndices()), x)
         idx_map[vj] = xj
     end
@@ -103,11 +103,11 @@ function MOI.copy_to(
     # objective function
     obj_type = MOI.get(src, MOI.ObjectiveFunctionType())
     obj = MOI.get(src, MOI.ObjectiveFunction{obj_type}())
-    MOI.set(approx_opt, MOI.ObjectiveFunction{obj_type}(), obj)
+    MOI.set(approx_model, MOI.ObjectiveFunction{obj_type}(), obj)
 
     obj_sense = MOI.get(src, MOI.ObjectiveSense())
     @assert obj_sense == MOI.MIN_SENSE # TODO generalize
-    MOI.set(approx_opt, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.set(approx_model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
     # constraints
     get_src_cons(F, S) = MOI.get(src, MOI.ListOfConstraintIndices{F, S}())
@@ -119,7 +119,7 @@ function MOI.copy_to(
         for ci in get_src_cons(F, S)
             old_fun = get_con_fun(ci)
             new_fun = .... # TODO need the function to use new variable indices
-            idx_map[ci] = MOI.add_constraint(approx_opt, new_fun, get_con_set(ci))
+            idx_map[ci] = MOI.add_constraint(approx_model, new_fun, get_con_set(ci))
         end
     end
     for F in linear_scalar_funs, S in linear_scalar_sets # scalar constraints
@@ -159,7 +159,7 @@ function MOI.copy_to(
         # q += dim
     end
 
-    opt.approx_opt = approx_opt
+    opt.approx_model = approx_model
     opt.cones = cones
     opt.status = :Loaded
 
@@ -167,7 +167,7 @@ function MOI.copy_to(
 end
 
 function MOI.optimize!(opt::Optimizer)
-    solver = Solvers.SepCutsSolver(opt.approx_opt, opt.cones) # TODO tols
+    solver = Solvers.SepCutsSolver(opt.approx_model, opt.cones) # TODO tols
     Solvers.solve(solver)
 
     opt.status = Solvers.get_status(solver)
