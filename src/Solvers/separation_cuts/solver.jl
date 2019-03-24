@@ -13,6 +13,7 @@ mutable struct SepCutsSolver <: Solver
     time_limit::Float64
 
     approx_model::MOI.ModelLike
+    funcs::Vector{Union{MOI.VectorOfVariables, MOI.VectorAffineFunction}}
     cones::Vector{Cones.Cone}
 
     status::Symbol
@@ -21,6 +22,7 @@ mutable struct SepCutsSolver <: Solver
 
     function SepCutsSolver(
         approx_model::MOI.ModelLike,
+        funcs::Vector{Union{MOI.VectorOfVariables, MOI.VectorAffineFunction}}
         cones::Vector{Cones.Cone},
         ;
         verbose::Bool = true,
@@ -40,6 +42,7 @@ mutable struct SepCutsSolver <: Solver
         solver.time_limit = time_limit
 
         solver.approx_model = approx_model
+        solver.funcs = funcs
         solver.cones = cones
 
         solver.status = :SolveNotCalled
@@ -103,14 +106,16 @@ function solve(solver::SepCutsSolver)
         end
 
         is_cut_off = false
-        for cone in solver.cones
+        for k in eachindex(solver.cones)
+            func_val = MOI.get(solver.approx_model, MOI.ConstraintPrimal(), MOI.ConstraintIndex{F, S}) # TODO fix
+            cone = solver.cones[k]
             cuts = check_feas_get_cuts(cone)
             @show length(cuts)
             if !isempty(cuts)
                 is_cut_off = true
                 for cut in cuts
                     affexpr = ... # TODO
-                    cut_ref = MOI.add_constraint(solver.model, cut_func, MOI.GreaterThan(0.0))
+                    cut_ref = MOI.add_constraint(solver.approx_model, cut_func, MOI.GreaterThan(0.0))
                     # TODO store cut_ref with the constraint so can access values/duals
                 end
             end
