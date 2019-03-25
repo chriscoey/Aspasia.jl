@@ -55,11 +55,12 @@ conic_exclude = String[
     "rootdets",
     ]
 
-function test_moi(verbose, approx_solver)
+function test_moi(verbose, approx_solver, approx_options)
     optimizer = MOIU.CachingOptimizer(
         MOIU.UniversalFallback(AspasiaModelData{Float64}()),
         Aspasia.Optimizer(
             approx_solver,
+            approx_options,
             verbose = verbose,
             time_limit = 2e1,
             tol_rel_opt = 2e-8,

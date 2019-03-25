@@ -3,24 +3,26 @@ Copyright 2019, Chris Coey and contributors
 
 definitions of conic sets not already defined by MathOptInterface
 and oracles for polyhedral approximation
+
+TODO refactor eigendecomps and cuts on lambda
 =#
 
 const rt2 = sqrt(2)
 const rt2i = inv(rt2)
 
 # lower triangle mat to vec
-function mat_to_vec!(vec::Vector{Float64}, mat::AbstractMatrix{Float64})
+function mat_to_vec_scale!(vec::Vector{Float64}, mat::AbstractMatrix{Float64})
     k = 1
     m = size(mat, 1)
     for i in 1:m, j in 1:i # fill from lower triangle
-        vec[k] = mat[i, j]
+        vec[k] = 2.0 * mat[i, j]
         k += 1
     end
     return vec
 end
 
 # vec to lower triangle mat
-function vec_to_mat!(mat::AbstractMatrix{Float64}, vec::Vector{Float64})
+function vec_to_mat_noscale!(mat::AbstractMatrix{Float64}, vec::Vector{Float64})
     k = 1
     m = size(mat, 1)
     for i in 1:m, j in 1:i # fill lower triangle
@@ -35,24 +37,25 @@ PSD cone
 cuts are <V*V^T, X> for eigenvectors V corresponding to negative eigenvalues of matrix point X
 =#
 function get_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTriangle)
+    cuts = Vector{Float64}[]
     L = cone.side_dimension
     X = Matrix{Float64}(undef, L, L)
-    vec_to_mat!(X, x)
+    vec_to_mat_noscale!(X, x)
 
     F = eigen!(Symmetric(X, :L), 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
-    cuts = Vector{Float64}[]
     for k in eachindex(F.values)
-        if F.values[k] >= 1e-5
+        if F.values[k] >= -1e-5 # TODO tolerance option
             continue
         end
-        V = F.vectors[:, k]
-        W = V * V'
-        cut = similar(x)
-        mat_to_vec!(cut, W) # TODO syrk
-        push!(cuts, cut)
 
-        @show dot(x, cut)
+        V = F.vectors[:, k]
+        W = V * V' # TODO syrk
+        cut = similar(x)
+        mat_to_vec_scale!(cut, W)
+        if dot(x, cut) < -1e-4 # TODO tolerance option
+            push!(cuts, cut)
+        end
     end
 
     return cuts
@@ -76,6 +79,7 @@ dimension(cone::WSOSPolyInterpCone) = cone.dimension
 function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
     cuts = Vector{Float64}[]
     U = cone.dimension
+
     for w in eachindex(cone.ipwt)
         P = cone.ipwt[w]
         L = size(P, 2)
@@ -91,11 +95,13 @@ function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
             if F.values[k] >= 1e-5
                 continue
             end
+
             V = F.vectors[:, k]
             cut = [] # TODO V * P' * Diagonal(vars) * P * V' # TODO syrk
             push!(cuts, cut)
         end
     end
+
     return cuts
 end
 
@@ -119,6 +125,7 @@ function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpMatCone)
     cuts = Vector{Float64}[]
     R = cone.R
     U = cone.U
+
     for w in eachindex(cone.ipwt)
         P = cone.ipwt[w]
         L = size(P, 2)
@@ -150,10 +157,12 @@ function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpMatCone)
             if F.values[k] >= 1e-5
                 continue
             end
+
             V = F.vectors[:, k]
             cut = [] # TODO V * ... * V' # TODO syrk
             push!(cuts, cut)
         end
     end
+
     return cuts
 end

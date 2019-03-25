@@ -28,8 +28,9 @@ include(joinpath(@__DIR__, "MathOptInterface.jl"))
 @info("starting MathOptInterface tests")
 verbose = false
 approx_solver = Clp.Optimizer
+approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
 @testset "MOI tests" begin
-    test_moi(verbose, approx_solver)
+    test_moi(verbose, approx_solver, approx_options)
 end
 
 

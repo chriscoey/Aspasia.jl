@@ -57,7 +57,7 @@ function solve(solver::SepCutsSolver)
     start_time = time()
 
     # TODO add initial fixed OA cuts eg variable bounds
-    
+
     # TODO for now assuming unbounded, but if get rays then need to cut them off
 
     # @printf("\n%5s %12s %12s %9s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
@@ -114,24 +114,27 @@ function solve(solver::SepCutsSolver)
 
         is_cut_off = false
         for k in eachindex(solver.con_sets)
-            # TODO get the variable values before
-            # TODO evaluate function k using sparse matrix constructed earlier
-            # TODO derive cuts
-            # TODO build new SAF for each using sparse matrix cut
-
             con_set = solver.con_sets[k]
             con_fun = solver.con_funs[k]
-            # TODO do not include constant if primal solution is a ray
-            func_val = MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi), con_fun)
-            cuts = Aspasia.get_cuts(func_val, con_set)
+            # TODO do not include constant if primal solution is a ray?
+            fun_val = MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi), con_fun)
+
+            cuts = Aspasia.get_cuts(fun_val, con_set)
             @show length(cuts)
-            if !isempty(cuts)
-                is_cut_off = true
-                for cut in cuts
-                    cut_expr = dot(cut, con_fun)
-                    cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
-                    # TODO store cut_ref with the constraint so can access values/duals
+            for cut in cuts
+                if con_fun isa MOI.VectorOfVariables
+                    cut_terms = MOI.ScalarAffineTerm.(cut, con_fun.variables)
+                    cut_constant = 0.0
+                else
+                    cut_terms = [MOI.ScalarAffineTerm(cut[t.output_index] * t.scalar_term.coefficient,
+                        t.scalar_term.variable_index) for t in con_fun.terms]
+                    cut_constant = dot(cut, con_fun.constants)
                 end
+
+                cut_expr = MOI.ScalarAffineFunction(cut_terms, cut_constant)
+                cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
+                # TODO store cut_ref with the constraint so can access values/duals
+                is_cut_off = true
             end
         end
         if !is_cut_off

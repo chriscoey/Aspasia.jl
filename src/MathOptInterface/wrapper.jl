@@ -13,6 +13,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     time_limit::Float64
 
     approx_solver
+    approx_options
 
     approx_model::MOI.ModelLike
     con_sets
@@ -23,9 +24,10 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     primal_obj::Float64
     dual_obj::Float64
 
-    function Optimizer(approx_solver, verbose::Bool, max_iters::Int, time_limit::Float64, tol_rel_opt::Float64, tol_abs_opt::Float64, tol_feas::Float64)
+    function Optimizer(approx_solver, approx_options, verbose::Bool, max_iters::Int, time_limit::Float64, tol_rel_opt::Float64, tol_abs_opt::Float64, tol_feas::Float64)
         opt = new()
         opt.approx_solver = approx_solver
+        opt.approx_options = approx_options
         opt.verbose = verbose
         opt.max_iters = max_iters
         opt.time_limit = time_limit
@@ -38,14 +40,15 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
 end
 
 Optimizer(
-    approx_solver;
+    approx_solver,
+    approx_options;
     verbose::Bool = false,
     max_iters::Int = 500,
     time_limit::Float64 = 3.6e3, # TODO should be Inf
     tol_rel_opt::Float64 = 1e-6,
     tol_abs_opt::Float64 = 1e-7,
     tol_feas::Float64 = 1e-7,
-    ) = Optimizer(approx_solver, verbose, max_iters, time_limit, tol_rel_opt, tol_abs_opt, tol_feas)
+    ) = Optimizer(approx_solver, approx_options, verbose, max_iters, time_limit, tol_rel_opt, tol_abs_opt, tol_feas)
 
 MOI.get(::Optimizer, ::MOI.SolverName) = "Aspasia"
 
@@ -101,7 +104,7 @@ function MOI.copy_to(
     @assert !copy_names
     idx_map = MOIU.IndexMap()
 
-    approx_model = opt.approx_solver()
+    approx_model = opt.approx_solver(; opt.approx_options...)
 
     # variables
     n = MOI.get(src, MOI.NumberOfVariables()) # columns of A
@@ -124,7 +127,7 @@ function MOI.copy_to(
     # con_funs = SparseMatrixCSC{Float64, Int}[]
     con_funs = MOI.AbstractVectorFunction[]
 
-    i = 1
+    i = 0
     for (F, S) in MOI.get(src, MOI.ListOfConstraints())
         if S in linear_sets
             # equality and orthant cone constraints
@@ -132,22 +135,12 @@ function MOI.copy_to(
         else
             # constraints requiring polyhedral approximation
             for ci in MOI.get(src, MOI.ListOfConstraintIndices{F, S}())
+                i += 1
+                idx_map[ci] = MOI.ConstraintIndex{F, S}(i)
                 si = MOI.get(src, MOI.ConstraintSet(), ci)
                 fi = MOI.get(src, MOI.ConstraintFunction(), ci)
                 push!(con_sets, si)
                 push!(con_funs, fi)
-
-                # m = MOI.dimension(si)
-                #
-                # if F == MOI.VectorOfVariables
-                #     con_fun = sparse(, m, n)
-                # else
-                #     @assert F == MOI.VectorAffineFunction{Float64}
-                #
-                # end
-
-                idx_map[ci] = MOI.ConstraintIndex{F, S}(i)
-                i += 1
             end
         end
     end
