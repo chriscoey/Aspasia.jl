@@ -16,27 +16,34 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     approx_options
 
     approx_model::MOI.ModelLike
-    con_sets
-    con_funs
+    con_sets::Vector{MOI.AbstractVectorSet}
+    con_funs::Vector{MOI.AbstractVectorFunction}
 
-    idx_map
+    idx_map::MOIU.IndexMap
 
     status::Symbol
     solve_time::Float64
-    primal_obj::Float64
-    dual_obj::Float64
+    obj_value::Float64
+    obj_bound::Float64
 
     function Optimizer(approx_solver, approx_options, verbose::Bool, max_iters::Int, time_limit::Float64, tol_rel_opt::Float64, tol_abs_opt::Float64, tol_feas::Float64)
         opt = new()
+
         opt.approx_solver = approx_solver
         opt.approx_options = approx_options
+
         opt.verbose = verbose
         opt.max_iters = max_iters
         opt.time_limit = time_limit
         opt.tol_rel_opt = tol_rel_opt
         opt.tol_abs_opt = tol_abs_opt
         opt.tol_feas = tol_feas
+
         opt.status = :NotLoaded
+        opt.solve_time = NaN
+        opt.obj_value = NaN
+        opt.obj_bound = NaN
+
         return opt
     end
 end
@@ -126,7 +133,6 @@ function MOI.copy_to(
 
     # constraints
     con_sets = MOI.AbstractVectorSet[]
-    # con_funs = SparseMatrixCSC{Float64, Int}[]
     con_funs = MOI.AbstractVectorFunction[]
 
     i = 0
@@ -162,7 +168,6 @@ function MOI.optimize!(opt::Optimizer)
 
     opt.status = Solvers.get_status(solver)
     opt.solve_time = Solvers.get_solve_time(solver)
-
     opt.obj_value = Solvers.get_obj_value(solver)
     opt.obj_bound = Solvers.get_obj_bound(solver)
 
@@ -243,7 +248,6 @@ MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) w
     MOI.get(opt.approx_model, MOI.ConstraintPrimal(), opt.idx_map[ci]) # scalar constraint so in approx_model
 
 MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: NonlinearSet} =
-    MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi),
-    MOI.get(src, MOI.ConstraintFunction(), opt.idx_map[ci]))
+    MOIU.evalvariables(vi -> MOI.get(opt.approx_model, MOI.VariablePrimal(), vi), opt.con_funs[opt.idx_map[ci].value])
 
 MOI.get(opt::Optimizer, a::MOI.ConstraintPrimal, ci::Vector{MOI.ConstraintIndex}) = MOI.get.(opt, a, ci)

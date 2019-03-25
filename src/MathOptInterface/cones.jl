@@ -36,7 +36,28 @@ end
 PSD cone
 cuts are <V*V^T, X> for eigenvectors V corresponding to negative eigenvalues of matrix point X
 =#
-function get_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTriangle)
+function get_init_cuts(cone::MOI.PositiveSemidefiniteConeTriangle)
+    cuts = Vector{Float64}[]
+    L = cone.side_dimension
+    dim = MOI.dimension(cone)
+
+    # diagonal variables are nonnegative
+    k = 1
+    for i in 1:L, j in 1:i
+        if i == j
+            cut = zeros(dim)
+            cut[k] = 1.0
+            push!(cuts, cut)
+        end
+        k += 1
+    end
+
+    # TODO scaled-diag dom linearizations like in Pajarito
+
+    return cuts
+end
+
+function get_sep_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTriangle)
     cuts = Vector{Float64}[]
     L = cone.side_dimension
     X = Matrix{Float64}(undef, L, L)
@@ -76,7 +97,7 @@ end
 WSOSPolyInterpCone(dimension::Int, ipwt::Vector{Matrix{Float64}}) = WSOSPolyInterpCone(dimension, ipwt, false)
 dimension(cone::WSOSPolyInterpCone) = cone.dimension
 
-function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
+function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
     cuts = Vector{Float64}[]
     U = cone.dimension
 
@@ -121,7 +142,7 @@ end
 WSOSPolyInterpMatCone(R::Int, U::Int, ipwt::Vector{Matrix{Float64}}) = WSOSPolyInterpMatCone(R, U, ipwt, false)
 dimension(cone::WSOSPolyInterpMatCone) = cone.dimension
 
-function get_cuts(x::Vector{Float64}, cone::WSOSPolyInterpMatCone)
+function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpMatCone)
     cuts = Vector{Float64}[]
     R = cone.R
     U = cone.U

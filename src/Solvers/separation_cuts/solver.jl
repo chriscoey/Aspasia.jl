@@ -13,8 +13,8 @@ mutable struct SepCutsSolver <: Solver
     time_limit::Float64
 
     approx_model::MOI.ModelLike
-    con_sets
-    con_funs
+    con_sets::Vector{MOI.AbstractVectorSet}
+    con_funs::Vector{MOI.AbstractVectorFunction}
 
     status::Symbol
     num_iters::Int
@@ -24,8 +24,8 @@ mutable struct SepCutsSolver <: Solver
 
     function SepCutsSolver(
         approx_model::MOI.ModelLike,
-        con_sets,
-        con_funs;
+        con_sets::Vector{MOI.AbstractVectorSet},
+        con_funs::Vector{MOI.AbstractVectorFunction};
         verbose::Bool = true,
         tol_rel_opt = 1e-6,
         tol_abs_opt = 1e-7,
@@ -60,9 +60,28 @@ function solve(solver::SepCutsSolver)
     solver.status = :SolveCalled
     start_time = time()
 
-    # TODO add initial fixed OA cuts eg variable bounds
+    # add initial fixed OA cuts eg variable bounds
+    for k in eachindex(solver.con_sets)
+        con_set = solver.con_sets[k]
+        con_fun = solver.con_funs[k]
 
-    # TODO for now assuming unbounded, but if get rays then need to cut them off
+        cuts = Aspasia.get_init_cuts(con_set)
+        @show length(cuts)
+        for cut in cuts
+            if con_fun isa MOI.VectorOfVariables
+                cut_terms = MOI.ScalarAffineTerm.(cut, con_fun.variables)
+                cut_constant = 0.0
+            else
+                cut_terms = [MOI.ScalarAffineTerm(cut[t.output_index] * t.scalar_term.coefficient,
+                    t.scalar_term.variable_index) for t in con_fun.terms]
+                cut_constant = dot(cut, con_fun.constants)
+            end
+
+            cut_expr = MOI.ScalarAffineFunction(cut_terms, cut_constant)
+            cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
+            # TODO store cut_ref with the constraint so can access values/duals
+        end
+    end
 
     # @printf("\n%5s %12s %12s %9s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
     #     "iter", "p_obj", "d_obj", "abs_gap", "rel_gap",
@@ -124,7 +143,7 @@ function solve(solver::SepCutsSolver)
             fun_val = MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi), con_fun)
             @assert !any(isnan, fun_val)
 
-            cuts = Aspasia.get_cuts(fun_val, con_set)
+            cuts = Aspasia.get_sep_cuts(fun_val, con_set)
             @show length(cuts)
             for cut in cuts
                 if con_fun isa MOI.VectorOfVariables
