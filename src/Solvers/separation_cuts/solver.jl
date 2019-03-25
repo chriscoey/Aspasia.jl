@@ -66,7 +66,6 @@ function solve(solver::SepCutsSolver)
         con_fun = solver.con_funs[k]
 
         cuts = Aspasia.get_init_cuts(con_set)
-        @show length(cuts)
         for cut in cuts
             if con_fun isa MOI.VectorOfVariables
                 cut_terms = MOI.ScalarAffineTerm.(cut, con_fun.variables)
@@ -91,11 +90,9 @@ function solve(solver::SepCutsSolver)
     # flush(stdout)
 
     while true
-        @show solver.num_iters
-
         MOI.optimize!(solver.approx_model)
+
         approx_model_status = MOI.get(solver.approx_model, MOI.TerminationStatus())
-        @show approx_model_status
         if approx_model_status == MOI.OPTIMAL
             solver.obj_bound = MOI.get(solver.approx_model, MOI.ObjectiveBound())
         elseif approx_model_status == MOI.DUAL_INFEASIBLE
@@ -144,7 +141,6 @@ function solve(solver::SepCutsSolver)
             @assert !any(isnan, fun_val)
 
             cuts = Aspasia.get_sep_cuts(fun_val, con_set)
-            @show length(cuts)
             for cut in cuts
                 if con_fun isa MOI.VectorOfVariables
                     cut_terms = MOI.ScalarAffineTerm.(cut, con_fun.variables)

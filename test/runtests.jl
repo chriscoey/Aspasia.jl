@@ -30,11 +30,12 @@ verbose = false
 approx_solver = GLPK.Optimizer
 # approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
 approx_options = (
-    msg_lev = GLPK.MSG_ON,
-    # msg_lev = GLPK.MSG_ERR, 
+    # msg_lev = GLPK.MSG_ON,
+    msg_lev = GLPK.MSG_ERR,
     tol_int = 1e-9,
-    tol_bnd = 1e-8,
-    mip_gap = 1e-8,
+    tol_bnd = 1e-9,
+    tol_dj = 1e-9,
+    mip_gap = 1e-9,
     )
 @testset "MOI tests" begin
     test_moi(verbose, approx_solver, approx_options)

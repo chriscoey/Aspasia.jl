@@ -19,8 +19,6 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     con_sets::Vector{MOI.AbstractVectorSet}
     con_funs::Vector{MOI.AbstractVectorFunction}
 
-    idx_map::MOIU.IndexMap
-
     status::Symbol
     solve_time::Float64
     obj_value::Float64
@@ -129,7 +127,7 @@ function MOI.copy_to(
     MOI.set(approx_model, MOI.ObjectiveFunction{obj_type}(), obj)
 
     obj_sense = MOI.get(src, MOI.ObjectiveSense())
-    MOI.set(approx_model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.set(approx_model, MOI.ObjectiveSense(), obj_sense)
 
     # constraints
     con_sets = MOI.AbstractVectorSet[]
@@ -157,7 +155,6 @@ function MOI.copy_to(
     opt.con_sets = con_sets
     opt.con_funs = con_funs
     opt.status = :Loaded
-    opt.idx_map = idx_map
 
     return idx_map
 end
@@ -229,12 +226,12 @@ function MOI.get(opt::Optimizer, ::MOI.DualStatus)
     end
 end
 
-MOI.get(opt::Optimizer, ::MOI.VariablePrimal, vi::MOI.VariableIndex) = MOI.get(opt.approx_model, MOI.VariablePrimal(), opt.idx_map[vi])
+MOI.get(opt::Optimizer, ::MOI.VariablePrimal, vi::MOI.VariableIndex) = MOI.get(opt.approx_model, MOI.VariablePrimal(), vi)
 
 MOI.get(opt::Optimizer, a::MOI.VariablePrimal, vi::Vector{MOI.VariableIndex}) = MOI.get.(opt, a, vi)
 
 MOI.get(opt::Optimizer, ::MOI.ConstraintDual, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: LinearSet} =
-    MOI.get(opt.approx_model, MOI.ConstraintDual(), opt.idx_map[ci]) # scalar constraint so in approx_model
+    MOI.get(opt.approx_model, MOI.ConstraintDual(), ci) # scalar constraint so in approx_model
 
 function MOI.get(opt::Optimizer, ::MOI.ConstraintDual, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: NonlinearSet}
     # dual vector corresponding to the constraint's polyhedral approximation is combination of the cuts weighted by their duals
@@ -245,9 +242,9 @@ end
 MOI.get(opt::Optimizer, a::MOI.ConstraintDual, ci::Vector{MOI.ConstraintIndex}) = MOI.get.(opt, a, ci)
 
 MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: LinearSet} =
-    MOI.get(opt.approx_model, MOI.ConstraintPrimal(), opt.idx_map[ci]) # scalar constraint so in approx_model
+    MOI.get(opt.approx_model, MOI.ConstraintPrimal(), ci) # scalar constraint so in approx_model
 
 MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: NonlinearSet} =
-    MOIU.evalvariables(vi -> MOI.get(opt.approx_model, MOI.VariablePrimal(), vi), opt.con_funs[opt.idx_map[ci].value])
+    MOIU.evalvariables(vi -> MOI.get(opt.approx_model, MOI.VariablePrimal(), vi), opt.con_funs[ci.value])
 
 MOI.get(opt::Optimizer, a::MOI.ConstraintPrimal, ci::Vector{MOI.ConstraintIndex}) = MOI.get.(opt, a, ci)

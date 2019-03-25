@@ -14,8 +14,12 @@ const rt2i = inv(rt2)
 function mat_to_vec_scale!(vec::Vector{Float64}, mat::AbstractMatrix{Float64})
     k = 1
     m = size(mat, 1)
-    for i in 1:m, j in 1:i # fill from lower triangle
-        vec[k] = 2.0 * mat[i, j]
+    for i in 1:m # fill vector from lower triangle, adding off-diagonals twice
+        for j in 1:(i - 1)
+            vec[k] = 2.0 * mat[i, j]
+            k += 1
+        end
+        vec[k] = mat[i, i]
         k += 1
     end
     return vec
@@ -25,12 +29,18 @@ end
 function vec_to_mat_noscale!(mat::AbstractMatrix{Float64}, vec::Vector{Float64})
     k = 1
     m = size(mat, 1)
-    for i in 1:m, j in 1:i # fill lower triangle
+    for i in 1:m, j in 1:i # fill lower triangle from vector
         mat[i, j] = vec[k]
         k += 1
     end
     return mat
 end
+
+# get (i,j) index in symmetric matrix from lower triangle index
+vec_to_mat_idx(k::Int) = div(1 + isqrt(8 * k - 7), 2)
+
+# get lower triangle vector index from (i,j) index in symmetric matrix
+mat_to_vec_idx(i::Int, j::Int) = (i < j) ? (div((j - 1) * j, 2) + i) : (div((i - 1) * i, 2) + j)
 
 #=
 PSD cone
@@ -42,17 +52,24 @@ function get_init_cuts(cone::MOI.PositiveSemidefiniteConeTriangle)
     dim = MOI.dimension(cone)
 
     # diagonal variables are nonnegative
-    k = 1
-    for i in 1:L, j in 1:i
-        if i == j
-            cut = zeros(dim)
-            cut[k] = 1.0
-            push!(cuts, cut)
-        end
-        k += 1
+    for i in 1:L
+        cut = zeros(dim)
+        cut[mat_to_vec_idx(i, i)] = 1.0
+        push!(cuts, cut)
     end
 
-    # TODO scaled-diag dom linearizations like in Pajarito
+    # 2x2 principal minors satisfy linearizations of PSD/RSOC condition
+    for i in 1:L, j in 1:(i - 1)
+        cut = zeros(dim)
+        cut[mat_to_vec_idx(i, i)] = 1.0
+        cut[mat_to_vec_idx(j, j)] = 1.0
+        ij_idx = mat_to_vec_idx(i, j)
+        cut[ij_idx] = -2.0
+        push!(cuts, cut)
+        cut = copy(cut)
+        cut[ij_idx] = 2.0
+        push!(cuts, cut)
+    end
 
     return cuts
 end
@@ -66,7 +83,7 @@ function get_sep_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTria
     F = eigen!(Symmetric(X, :L), 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
     for k in eachindex(F.values)
-        if F.values[k] >= -1e-5 # TODO tolerance option
+        if F.values[k] >= -1e-7 # TODO tolerance option
             continue
         end
 
@@ -74,7 +91,7 @@ function get_sep_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTria
         W = V * V' # TODO syrk
         cut = similar(x)
         mat_to_vec_scale!(cut, W)
-        if dot(x, cut) < -1e-4 # TODO tolerance option
+        if dot(x, cut) < -1e-6 # TODO tolerance option
             push!(cuts, cut)
         end
     end
@@ -113,7 +130,7 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
         F = eigen!(X, 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
         for k in eachindex(F.values)
-            if F.values[k] >= 1e-5
+            if F.values[k] >= 1e-6
                 continue
             end
 
@@ -175,7 +192,7 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpMatCone)
         F = eigen!(Symmetric(X, :L), 1:min(RL, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
         for k in eachindex(F.values)
-            if F.values[k] >= 1e-5
+            if F.values[k] >= 1e-6
                 continue
             end
 

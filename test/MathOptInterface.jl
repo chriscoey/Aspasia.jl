@@ -24,11 +24,11 @@ MOIU.@model(AspasiaModelData,
     )
 
 config = MOIT.TestConfig(
-    atol = 1e-4,
-    rtol = 1e-4,
+    atol = 1e-3,
+    rtol = 1e-3,
     solve = true,
-    query = false,
-    modify_lhs = false,
+    query = true,
+    modify_lhs = true,
     duals = false,
     infeas_certificates = false,
     )
