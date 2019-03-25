@@ -19,6 +19,8 @@ mutable struct SepCutsSolver <: Solver
     status::Symbol
     num_iters::Int
     solve_time::Float64
+    obj_value::Float64
+    obj_bound::Float64
 
     function SepCutsSolver(
         approx_model::MOI.ModelLike,
@@ -47,6 +49,8 @@ mutable struct SepCutsSolver <: Solver
         solver.status = :SolveNotCalled
         solver.num_iters = 0
         solver.solve_time = NaN
+        solver.obj_value = NaN
+        solver.obj_bound = NaN
 
         return solver
     end
@@ -74,7 +78,7 @@ function solve(solver::SepCutsSolver)
         approx_model_status = MOI.get(solver.approx_model, MOI.TerminationStatus())
         @show approx_model_status
         if approx_model_status == MOI.OPTIMAL
-            # TODO update obj bounds?
+            solver.obj_bound = MOI.get(solver.approx_model, MOI.ObjectiveBound())
         elseif approx_model_status == MOI.DUAL_INFEASIBLE
             # TODO need to cut off the ray
         elseif approx_model_status == MOI.INFEASIBLE
@@ -89,14 +93,14 @@ function solve(solver::SepCutsSolver)
             error("OA solver status not handled")
         end
 
-        if solver.verbose
+        # if solver.verbose
             # @printf("%5d %12.4e %12.4e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e\n",
             #     solver.num_iters, solver.primal_obj, solver.dual_obj, solver.gap, solver.rel_gap,
             #     solver.x_feas, solver.y_feas, solver.z_feas, solver.tau, solver.kap, solver.mu,
             #     stepper.prev_gamma, stepper.prev_alpha,
             #     )
             # flush(stdout)
-        end
+        # end
 
         # TODO check convergence
 
@@ -118,6 +122,7 @@ function solve(solver::SepCutsSolver)
             con_fun = solver.con_funs[k]
             # TODO do not include constant if primal solution is a ray?
             fun_val = MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi), con_fun)
+            @assert !any(isnan, fun_val)
 
             cuts = Aspasia.get_cuts(fun_val, con_set)
             @show length(cuts)
@@ -138,8 +143,9 @@ function solve(solver::SepCutsSolver)
             end
         end
         if !is_cut_off
-            println("point was not cut off")
+            println("no cuts were added; terminating")
             solver.status = :Optimal
+            solver.obj_value = MOI.get(solver.approx_model, MOI.ObjectiveValue())
             break
         end
 

@@ -18,7 +18,7 @@ using Test
 import MathOptInterface
 const MOI = MathOptInterface
 
-using Clp # approx solver
+using GLPK # approx solver
 
 
 include(joinpath(@__DIR__, "MathOptInterface.jl"))
@@ -27,8 +27,15 @@ include(joinpath(@__DIR__, "MathOptInterface.jl"))
 
 @info("starting MathOptInterface tests")
 verbose = false
-approx_solver = Clp.Optimizer
-approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
+approx_solver = GLPK.Optimizer
+# approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
+approx_options = (
+    msg_lev = GLPK.MSG_ON,
+    # msg_lev = GLPK.MSG_ERR, 
+    tol_int = 1e-9,
+    tol_bnd = 1e-8,
+    mip_gap = 1e-8,
+    )
 @testset "MOI tests" begin
     test_moi(verbose, approx_solver, approx_options)
 end

@@ -19,6 +19,8 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     con_sets
     con_funs
 
+    idx_map
+
     status::Symbol
     solve_time::Float64
     primal_obj::Float64
@@ -63,7 +65,24 @@ MOI.supports(::Optimizer, ::Union{
     MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}},
     }) = true
 
-ApproxCones = ( # cones to use polyhedral approximation on
+# TODO don't restrict to Float64 type
+# TODO allow SOC/quadratic constraints if approx solver allows specifying?
+SupportedFun = Union{
+    MOI.SingleVariable, MOI.ScalarAffineFunction{Float64},
+    MOI.VectorOfVariables, MOI.VectorAffineFunction{Float64},
+    }
+
+LinearSet = Union{
+    MOI.EqualTo{Float64},
+    MOI.GreaterThan{Float64},
+    MOI.LessThan{Float64},
+    MOI.Interval{Float64},
+    MOI.Zeros,
+    MOI.Nonnegatives,
+    MOI.Nonpositives
+    }
+
+NonlinearSet = Union{ # cones to use polyhedral approximation on
     # MOI.SecondOrderCone,
     # MOI.RotatedSecondOrderCone,
     # MOI.ExponentialCone,
@@ -73,26 +92,10 @@ ApproxCones = ( # cones to use polyhedral approximation on
     # MOI.LogDetConeTriangle,
     WSOSPolyInterpCone,
     WSOSPolyInterpMatCone,
-    )
-
-# TODO don't restrict to Float64 type
-# TODO allow SOC/quadratic constraints if approx solver allows specifying?
-SupportedFuns = Union{
-    MOI.SingleVariable, MOI.ScalarAffineFunction{Float64},
-    MOI.VectorOfVariables, MOI.VectorAffineFunction{Float64},
     }
 
-SupportedSets = Union{
-    MOI.EqualTo{Float64}, MOI.Zeros,
-    MOI.GreaterThan{Float64}, MOI.Nonnegatives,
-    MOI.LessThan{Float64}, MOI.Nonpositives,
-    MOI.Interval{Float64},
-    ApproxCones...
-    }
-
-MOI.supports_constraint(::Optimizer, ::Type{<:SupportedFuns}, ::Type{<:SupportedSets}) = true
-
-linear_sets = (MOI.EqualTo{Float64}, MOI.GreaterThan{Float64}, MOI.LessThan{Float64}, MOI.Interval{Float64}, MOI.Zeros, MOI.Nonnegatives, MOI.Nonpositives)
+MOI.supports_constraint(::Optimizer, ::Type{<:SupportedFun}, ::Type{<:LinearSet}) = true
+MOI.supports_constraint(::Optimizer, ::Type{<:SupportedFun}, ::Type{<:NonlinearSet}) = true
 
 # build polyhedral approximation MOI model and list of cone objects
 function MOI.copy_to(
@@ -119,7 +122,6 @@ function MOI.copy_to(
     MOI.set(approx_model, MOI.ObjectiveFunction{obj_type}(), obj)
 
     obj_sense = MOI.get(src, MOI.ObjectiveSense())
-    @assert obj_sense == MOI.MIN_SENSE # TODO generalize
     MOI.set(approx_model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
     # constraints
@@ -129,7 +131,7 @@ function MOI.copy_to(
 
     i = 0
     for (F, S) in MOI.get(src, MOI.ListOfConstraints())
-        if S in linear_sets
+        if S <: LinearSet
             # equality and orthant cone constraints
             MOIU.copyconstraints!(approx_model, src, false, idx_map, F, S)
         else
@@ -149,6 +151,7 @@ function MOI.copy_to(
     opt.con_sets = con_sets
     opt.con_funs = con_funs
     opt.status = :Loaded
+    opt.idx_map = idx_map
 
     return idx_map
 end
@@ -159,8 +162,9 @@ function MOI.optimize!(opt::Optimizer)
 
     opt.status = Solvers.get_status(solver)
     opt.solve_time = Solvers.get_solve_time(solver)
-    # opt.primal_obj = Solvers.get_primal_obj(solver)
-    # opt.dual_obj = Solvers.get_dual_obj(solver)
+
+    opt.obj_value = Solvers.get_obj_value(solver)
+    opt.obj_bound = Solvers.get_obj_bound(solver)
 
     return
 end
@@ -186,25 +190,8 @@ function MOI.get(opt::Optimizer, ::MOI.TerminationStatus)
     end
 end
 
-function MOI.get(opt::Optimizer, ::MOI.ObjectiveValue)
-    if opt.obj_sense == MOI.MIN_SENSE
-        return opt.primal_obj
-    # elseif opt.obj_sense == MOI.MAX_SENSE
-    #     return -opt.primal_obj
-    else
-        error("no objective sense is set")
-    end
-end
-
-function MOI.get(opt::Optimizer, ::MOI.ObjectiveBound)
-    if opt.obj_sense == MOI.MIN_SENSE
-        return opt.dual_obj
-    # elseif opt.obj_sense == MOI.MAX_SENSE
-    #     return -opt.dual_obj
-    else
-        error("no objective sense is set")
-    end
-end
+MOI.get(opt::Optimizer, ::MOI.ObjectiveValue) = opt.obj_value
+MOI.get(opt::Optimizer, ::MOI.ObjectiveBound) = opt.obj_bound
 
 function MOI.get(opt::Optimizer, ::MOI.ResultCount)
     if opt.status in (:Optimal, :PrimalInfeasible, :DualInfeasible)
@@ -237,67 +224,26 @@ function MOI.get(opt::Optimizer, ::MOI.DualStatus)
     end
 end
 
+MOI.get(opt::Optimizer, ::MOI.VariablePrimal, vi::MOI.VariableIndex) = MOI.get(opt.approx_model, MOI.VariablePrimal(), opt.idx_map[vi])
 
-
-
-
-# TODO same variables and same linear constraints, but for nonpolyhedral constraint need to combine cut information
-
-MOI.get(opt::Optimizer, ::MOI.VariablePrimal, vi::MOI.VariableIndex) = opt.x[vi.value]
 MOI.get(opt::Optimizer, a::MOI.VariablePrimal, vi::Vector{MOI.VariableIndex}) = MOI.get.(opt, a, vi)
 
-function MOI.get(opt::Optimizer, ::MOI.ConstraintDual, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: MOI.AbstractScalarSet}
-    # scalar set
-    i = ci.value
-    if i <= opt.num_eq_constrs
-        # constraint is an equality
-        return opt.y[opt.constr_offset_eq[i] + 1]
-    else
-        # constraint is conic
-        i -= opt.num_eq_constrs
-        return opt.z[opt.constr_offset_cone[i] + 1]
-    end
+MOI.get(opt::Optimizer, ::MOI.ConstraintDual, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: LinearSet} =
+    MOI.get(opt.approx_model, MOI.ConstraintDual(), opt.idx_map[ci]) # scalar constraint so in approx_model
+
+function MOI.get(opt::Optimizer, ::MOI.ConstraintDual, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: NonlinearSet}
+    # dual vector corresponding to the constraint's polyhedral approximation is combination of the cuts weighted by their duals
+    # TODO use the refs of the cuts for the constraint
+    return []
 end
-function MOI.get(opt::Optimizer, ::MOI.ConstraintDual, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: MOI.AbstractVectorSet}
-    # vector set
-    i = ci.value
-    if i <= opt.num_eq_constrs
-        # constraint is an equality
-        os = opt.constr_offset_eq
-        return opt.y[(os[i] + 1):os[i + 1]]
-    else
-        # constraint is conic
-        i -= opt.num_eq_constrs
-        os = opt.constr_offset_cone
-        return opt.z[(os[i] + 1):os[i + 1]]
-    end
-end
+
 MOI.get(opt::Optimizer, a::MOI.ConstraintDual, ci::Vector{MOI.ConstraintIndex}) = MOI.get.(opt, a, ci)
 
-function MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: MOI.AbstractScalarSet}
-    # scalar set
-    i = ci.value
-    if i <= opt.num_eq_constrs
-        # constraint is an equality
-        return opt.constr_prim_eq[opt.constr_offset_eq[i] + 1]
-    else
-        # constraint is conic
-        i -= opt.num_eq_constrs
-        return opt.constr_prim_cone[opt.constr_offset_cone[i] + 1]
-    end
-end
-function MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: MOI.AbstractVectorSet}
-    # vector set
-    i = ci.value
-    if i <= opt.num_eq_constrs
-        # constraint is an equality
-        os = opt.constr_offset_eq
-        return opt.constr_prim_eq[(os[i] + 1):os[i + 1]]
-    else
-        # constraint is conic
-        i -= opt.num_eq_constrs
-        os = opt.constr_offset_cone
-        return opt.constr_prim_cone[(os[i] + 1):os[i + 1]]
-    end
-end
+MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: LinearSet} =
+    MOI.get(opt.approx_model, MOI.ConstraintPrimal(), opt.idx_map[ci]) # scalar constraint so in approx_model
+
+MOI.get(opt::Optimizer, ::MOI.ConstraintPrimal, ci::MOI.ConstraintIndex{F, S}) where {F <: MOI.AbstractFunction, S <: NonlinearSet} =
+    MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi),
+    MOI.get(src, MOI.ConstraintFunction(), opt.idx_map[ci]))
+
 MOI.get(opt::Optimizer, a::MOI.ConstraintPrimal, ci::Vector{MOI.ConstraintIndex}) = MOI.get.(opt, a, ci)

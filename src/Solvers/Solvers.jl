@@ -22,4 +22,7 @@ get_status(solver::Solver) = solver.status
 get_solve_time(solver::Solver) = solver.solve_time
 get_num_iters(solver::Solver) = solver.num_iters
 
+get_obj_value(solver::Solver) = solver.obj_value
+get_obj_bound(solver::Solver) = solver.obj_bound
+
 end
