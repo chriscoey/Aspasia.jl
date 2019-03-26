@@ -139,6 +139,7 @@ function get_sep_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTria
         W = V * V' # TODO syrk
         cut = similar(x)
         mat_to_vec_scale!(cut, W)
+
         if dot(x, cut) < -1e-6 # TODO tolerance option
             push!(cuts, cut)
         end
@@ -162,6 +163,37 @@ end
 WSOSPolyInterpCone(dimension::Int, ipwt::Vector{Matrix{Float64}}) = WSOSPolyInterpCone(dimension, ipwt, false)
 dimension(cone::WSOSPolyInterpCone) = cone.dimension
 
+function get_init_cuts(cone::WSOSPolyInterpCone)
+    cuts = Vector{Float64}[]
+    U = cone.dimension
+
+    for w in eachindex(cone.ipwt)
+        P = cone.ipwt[w]
+        L = size(P, 2)
+
+        PiPj = Matrix{Vector{Float64}}(undef, L, L)
+        for i in 1:L, j in 1:i
+            PiPj[i, j] = P[:, i] .* P[:, j]
+        end
+
+        # diagonal of Λ is nonnegative
+        for i in 1:L
+            push!(cuts, PiPj[i, i])
+        end
+
+        # 2x2 principal minors of Λ satisfy linearizations of PSD/RSOC condition
+        for i in 1:L, j in 1:(i - 1)
+            cut = PiPj[i, i] + PiPj[j, j] + 2.0 * PiPj[i, j]
+            push!(cuts, cut)
+            cut = PiPj[i, i] + PiPj[j, j] - 2.0 * PiPj[i, j]
+            push!(cuts, cut)
+        end
+    end
+
+    return cuts
+end
+
+# TODO maybe faster if store the PiPj matrix calculated for initial cuts and re-use here
 function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
     cuts = Vector{Float64}[]
     U = cone.dimension
@@ -172,19 +204,23 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
         X = Symmetric(P' * Diagonal(x) * P)
         # X = Matrix{Float64}(undef, L, L)
         # for i in 1:L, j in 1:i
-        #     X[i, j] = sum(Wt[u, i] * Wt[u, j] * x[u] for u in eachindex(x))
+        #     X[i, j] = sum(P[u, i] * P[u, j] * x[u] for u in eachindex(x))
         # end
 
         F = eigen!(X, 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
 
         for k in eachindex(F.values)
-            if F.values[k] >= 1e-6
+            if F.values[k] >= -1e-7
                 continue
             end
 
             V = F.vectors[:, k]
-            cut = [] # TODO V * P' * Diagonal(vars) * P * V' # TODO syrk
-            push!(cuts, cut)
+            PV = P * V
+            cut = abs2.(PV) # V' * P' * Diagonal(vars) * P * V
+
+            if dot(x, cut) < -1e-6 # TODO tolerance option
+                push!(cuts, cut)
+            end
         end
     end
 
