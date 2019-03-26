@@ -18,6 +18,7 @@ mutable struct SepCutsSolver <: Solver
 
     status::Symbol
     num_iters::Int
+    num_cuts::Int
     solve_time::Float64
     obj_value::Float64
     obj_bound::Float64
@@ -48,6 +49,7 @@ mutable struct SepCutsSolver <: Solver
 
         solver.status = :SolveNotCalled
         solver.num_iters = 0
+        solver.num_cuts = 0
         solver.solve_time = NaN
         solver.obj_value = NaN
         solver.obj_bound = NaN
@@ -80,14 +82,17 @@ function solve(solver::SepCutsSolver)
             cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(-cut_constant))
             # TODO store cut_ref with the constraint so can access values/duals
         end
+
+        solver.num_cuts += length(cuts)
     end
 
-    # @printf("\n%5s %12s %12s %9s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-    #     "iter", "p_obj", "d_obj", "abs_gap", "rel_gap",
-    #     "x_feas", "y_feas", "z_feas", "tau", "kap", "mu",
-    #     "gamma", "alpha",
-    #     )
-    # flush(stdout)
+    if solver.verbose
+        println("initial cut count: $(solver.num_cuts)")
+        @printf("\n%5s %8s %12s\n",
+            "iter", "cuts", "obj bound",
+            )
+        flush(stdout)
+    end
 
     while true
         MOI.optimize!(solver.approx_model)
@@ -112,14 +117,12 @@ function solve(solver::SepCutsSolver)
             error("OA solver status not handled")
         end
 
-        # if solver.verbose
-            # @printf("%5d %12.4e %12.4e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e %9.2e\n",
-            #     solver.num_iters, solver.primal_obj, solver.dual_obj, solver.gap, solver.rel_gap,
-            #     solver.x_feas, solver.y_feas, solver.z_feas, solver.tau, solver.kap, solver.mu,
-            #     stepper.prev_gamma, stepper.prev_alpha,
-            #     )
-            # flush(stdout)
-        # end
+        if solver.verbose
+            @printf("%5d %8d %12.4e\n",
+                solver.num_iters, solver.num_cuts, solver.obj_bound,
+                )
+            flush(stdout)
+        end
 
         # TODO check convergence
 
@@ -159,6 +162,8 @@ function solve(solver::SepCutsSolver)
                 # TODO store cut_ref with the constraint so can access values/duals
                 is_cut_off = true
             end
+
+            solver.num_cuts += length(cuts)
         end
         if !is_cut_off
             solver.verbose && println("no cuts were added; terminating")

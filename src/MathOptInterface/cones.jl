@@ -207,7 +207,9 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
         #     X[i, j] = sum(P[u, i] * P[u, j] * x[u] for u in eachindex(x))
         # end
 
-        F = eigen!(X, 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+        # F = eigen!(X, 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+        # F = eigen!(X, -Inf, -1e-7)
+        F = eigen!(X)
 
         for k in eachindex(F.values)
             if F.values[k] >= -1e-7
@@ -217,6 +219,8 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
             V = F.vectors[:, k]
             PV = P * V
             cut = abs2.(PV) # V' * P' * Diagonal(vars) * P * V
+
+            @show dot(x, cut)
 
             if dot(x, cut) < -1e-6 # TODO tolerance option
                 push!(cuts, cut)

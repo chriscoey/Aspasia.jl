@@ -13,8 +13,30 @@ using Test
 import MathOptInterface
 const MOI = MathOptInterface
 
-using GLPK # approx solver
-
+# approx solver
+# using GLPK
+# approx_solver = GLPK.Optimizer
+# approx_options = (
+#     method = :Simplex,
+#     msg_lev = GLPK.MSG_ON,
+#     # msg_lev = GLPK.MSG_ERR,
+#     tol_int = 1e-9,
+#     tol_bnd = 1e-9,
+#     tol_dj = 1e-9,
+#     mip_gap = 1e-9,
+#     )
+# using Clp
+# approx_solver = Clp.Optimizer
+# approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
+using Gurobi
+approx_solver = Gurobi.Optimizer
+approx_options = (
+    OutputFlag = 1,
+    FeasibilityTol = 1e-8,
+    OptimalityTol = 1e-8,
+    IntFeasTol = 1e-9,
+    MIPGap = 1e-8,
+)
 
 include(joinpath(@__DIR__, "MathOptInterface.jl"))
 
@@ -22,17 +44,6 @@ include(joinpath(@__DIR__, "MathOptInterface.jl"))
 #
 # @info("starting MathOptInterface tests")
 # verbose = false
-# approx_solver = GLPK.Optimizer
-# # approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
-# approx_options = (
-#     method = :Simplex,
-#     # msg_lev = GLPK.MSG_ON,
-#     msg_lev = GLPK.MSG_ERR,
-#     tol_int = 1e-9,
-#     tol_bnd = 1e-9,
-#     tol_dj = 1e-9,
-#     mip_gap = 1e-9,
-#     )
 # @testset "MOI tests" begin
 #     test_moi(verbose, approx_solver, approx_options)
 # end
@@ -208,7 +219,13 @@ function build_JuMP_namedpoly_WSOS(
     (U, pts, P0, PWts, _) = MU.interpolate(dom, d, sample = sample, sample_factor = 100)
 
     # build JuMP model
-    model = JuMP.Model(JuMP.with_optimizer(ASP.Optimizer))
+    model = JuMP.Model(JuMP.with_optimizer(ASP.Optimizer, approx_solver, approx_options,
+        verbose = true,
+        time_limit = 2e1,
+        tol_rel_opt = 2e-8,
+        tol_abs_opt = 2e-8,
+        tol_feas = 1e-8,
+        ))
     JuMP.@variable(model, x[1:U])
     JuMP.@objective(model, Min, sum(x[j] * f(pts[j, :]...) for j in 1:U))
     JuMP.@constraint(model, sum(x) == 1.0)
@@ -219,7 +236,7 @@ end
 
 
 @testset "namedpoly dual" begin
-    (polyname, deg) = (:caprasse, 4)
+    (polyname, deg) = (:goldsteinprice, 2)
     (x, f, dom, truemin) = getpolydata(polyname)
 
     model = build_JuMP_namedpoly_WSOS(x, f, dom, d = deg)
