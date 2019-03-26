@@ -236,7 +236,7 @@ end
 
 
 @testset "namedpoly dual" begin
-    (polyname, deg) = (:goldsteinprice, 2)
+    (polyname, deg) = (:goldsteinprice, 4)
     (x, f, dom, truemin) = getpolydata(polyname)
 
     model = build_JuMP_namedpoly_WSOS(x, f, dom, d = deg)
@@ -252,6 +252,6 @@ end
     @test term_status == MOI.OPTIMAL
     @test pr_status == MOI.FEASIBLE_POINT
     @test du_status == MOI.FEASIBLE_POINT
-    @test primal_obj ≈ dual_obj atol = 1e-4 rtol = 1e-4
-    @test primal_obj ≈ truemin atol = 1e-4 rtol = 1e-4
+    @test primal_obj ≈ dual_obj atol = 1e-2 rtol = 1e-2
+    @test primal_obj ≈ truemin atol = 1e-2 rtol = 1e-2
 end
