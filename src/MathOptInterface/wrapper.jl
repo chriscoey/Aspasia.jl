@@ -88,7 +88,7 @@ LinearSet = Union{
     }
 
 NonlinearSet = Union{ # cones to use polyhedral approximation on
-    # MOI.SecondOrderCone,
+    MOI.SecondOrderCone,
     # MOI.RotatedSecondOrderCone,
     # MOI.ExponentialCone,
     # MOI.PowerCone{Float64},

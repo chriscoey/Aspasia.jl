@@ -42,9 +42,57 @@ vec_to_mat_idx(k::Int) = div(1 + isqrt(8 * k - 7), 2)
 # get lower triangle vector index from (i,j) index in symmetric matrix
 mat_to_vec_idx(i::Int, j::Int) = (i < j) ? (div((j - 1) * j, 2) + i) : (div((i - 1) * i, 2) + j)
 
+
+#=
+second-order cone
+cuts are (1, -y/||y||_2) for (z, y) outside the cone
+TODO extended formulation
+=#
+function get_init_cuts(cone::MOI.SecondOrderCone)
+    cuts = Vector{Float64}[]
+    dim = MOI.dimension(cone)
+
+    # z is nonnegative
+    cut = zeros(dim)
+    cut[1] = 1.0
+    push!(cuts, cut)
+
+    # z is at least absolute value of each y_i
+    for i in 2:dim
+        cut = zeros(dim)
+        cut[1] = 1.0
+        cut[i] = 1.0
+        push!(cuts, cut)
+        cut = copy(cut)
+        cut[i] = -1.0
+        push!(cuts, cut)
+    end
+
+    return cuts
+end
+
+function get_sep_cuts(x::Vector{Float64}, cone::MOI.SecondOrderCone)
+    dim = MOI.dimension(cone)
+    y_norm = norm(x[i] for i in 2:dim)
+
+    if y_norm - x[1] > 1e-7
+        cut = similar(x)
+        cut[1] = 1
+        for i in 2:dim
+            cut[i] = -x[i] / y_norm
+        end
+
+        if dot(x, cut) < -1e-6 # TODO tolerance option
+            return [cut]
+        end
+    end
+
+    return Vector{Float64}[]
+end
+
 #=
 PSD cone
-cuts are <V*V^T, X> for eigenvectors V corresponding to negative eigenvalues of matrix point X
+cuts are V*V^T for eigenvectors V corresponding to negative eigenvalues of matrix point X
 =#
 function get_init_cuts(cone::MOI.PositiveSemidefiniteConeTriangle)
     cuts = Vector{Float64}[]
@@ -64,10 +112,10 @@ function get_init_cuts(cone::MOI.PositiveSemidefiniteConeTriangle)
         cut[mat_to_vec_idx(i, i)] = 1.0
         cut[mat_to_vec_idx(j, j)] = 1.0
         ij_idx = mat_to_vec_idx(i, j)
-        cut[ij_idx] = -2.0
+        cut[ij_idx] = 2.0
         push!(cuts, cut)
         cut = copy(cut)
-        cut[ij_idx] = 2.0
+        cut[ij_idx] = -2.0
         push!(cuts, cut)
     end
 

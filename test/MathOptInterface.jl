@@ -42,17 +42,13 @@ unit_exclude = [
 
 conic_exclude = String[
     "lin",
-    "soc",
-    "rsoc",
+    # "soc",
+    # "rsoc",
     "exp",
     "geomean",
     # "sdp",
-    "psds",
     "logdet",
     "rootdet",
-    # TODO MOI bridges don't support square logdet or rootdet
-    "logdets",
-    "rootdets",
     ]
 
 function test_moi(verbose, approx_solver, approx_options)
@@ -76,8 +72,8 @@ function test_moi(verbose, approx_solver, approx_options)
     # end
     @testset "conic tests" begin
         MOIT.contconictest(
+            MOIB.RSOC{Float64}(
             MOIB.SquarePSD{Float64}(
-            MOIB.SOCtoPSD{Float64}(
             optimizer)), config, conic_exclude)
     end
     return

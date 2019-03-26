@@ -30,6 +30,7 @@ verbose = false
 approx_solver = GLPK.Optimizer
 # approx_options = (PrimalTolerance = 1e-8, DualTolerance = 1e-8, LogLevel = 0)
 approx_options = (
+    method = :Simplex,
     # msg_lev = GLPK.MSG_ON,
     msg_lev = GLPK.MSG_ERR,
     tol_int = 1e-9,

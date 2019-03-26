@@ -76,8 +76,8 @@ function solve(solver::SepCutsSolver)
                 cut_constant = dot(cut, con_fun.constants)
             end
 
-            cut_expr = MOI.ScalarAffineFunction(cut_terms, cut_constant)
-            cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
+            cut_expr = MOI.ScalarAffineFunction(cut_terms, 0.0)
+            cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(-cut_constant))
             # TODO store cut_ref with the constraint so can access values/duals
         end
     end
@@ -102,8 +102,11 @@ function solve(solver::SepCutsSolver)
             solver.status = :PrimalInfeasible
             break
         elseif approx_model_status == MOI.INFEASIBLE_OR_UNBOUNDED
-            solver.verbose && println("infeasibility or unboundedness detected; terminating")
-            solver.status = :ApproxSolverStatusNotHandled
+            @show approx_model_status
+            # solver.verbose && println("infeasibility or unboundedness detected; terminating")
+            # solver.status = :ApproxSolverStatusNotHandled
+            solver.verbose && println("LP solver returned infeasible or unbounded - we are assuming infeasibility, but we could be wrong")
+            solver.status = :PrimalInfeasible
             break
         else
             error("OA solver status not handled")
@@ -151,14 +154,14 @@ function solve(solver::SepCutsSolver)
                     cut_constant = dot(cut, con_fun.constants)
                 end
 
-                cut_expr = MOI.ScalarAffineFunction(cut_terms, cut_constant)
-                cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(0.0))
+                cut_expr = MOI.ScalarAffineFunction(cut_terms, 0.0)
+                cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(-cut_constant))
                 # TODO store cut_ref with the constraint so can access values/duals
                 is_cut_off = true
             end
         end
         if !is_cut_off
-            println("no cuts were added; terminating")
+            solver.verbose && println("no cuts were added; terminating")
             solver.status = :Optimal
             solver.obj_value = MOI.get(solver.approx_model, MOI.ObjectiveValue())
             break
