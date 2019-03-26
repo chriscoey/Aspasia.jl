@@ -211,8 +211,10 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
         # F = eigen!(X, -Inf, -1e-7)
         F = eigen!(X)
 
+        @show F.values
+
         for k in eachindex(F.values)
-            if F.values[k] >= -1e-7
+            if F.values[k] >= -1e-9
                 continue
             end
 
@@ -222,7 +224,7 @@ function get_sep_cuts(x::Vector{Float64}, cone::WSOSPolyInterpCone)
 
             @show dot(x, cut)
 
-            if dot(x, cut) < -1e-6 # TODO tolerance option
+            if dot(x, cut) < -1e-8 # TODO tolerance option
                 push!(cuts, cut)
             end
         end

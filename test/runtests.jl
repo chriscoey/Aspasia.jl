@@ -32,8 +32,8 @@ using Gurobi
 approx_solver = Gurobi.Optimizer
 approx_options = (
     OutputFlag = 1,
-    FeasibilityTol = 1e-8,
-    OptimalityTol = 1e-8,
+    FeasibilityTol = 1e-9,
+    OptimalityTol = 1e-9,
     IntFeasTol = 1e-9,
     MIPGap = 1e-8,
 )
