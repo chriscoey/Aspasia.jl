@@ -1,4 +1,9 @@
+Manifest.toml
+*.DS_Store
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
 deps/deps.jl
+benchmarks/*/analysis/*
+benchmarks/*/raw/*
+scratch.jl

@@ -1,64 +1,9 @@
-#=
-Copyright 2019, Chris Coey and contributors
+"""
+outer approximation algorithm for mixed-integer conic problems
+"""
 
-algorithm for mixed-integer conic outer approximation with separation K* cuts (no conic subproblem)
-=#
-
-mutable struct SepCutsSolver <: Solver
-    verbose::Bool
-    tol_rel_opt::Float64
-    tol_abs_opt::Float64
-    tol_feas::Float64
-    max_iters::Int
-    time_limit::Float64
-
-    approx_model::MOI.ModelLike
-    con_sets::Vector{MOI.AbstractVectorSet}
-    con_funs::Vector{MOI.AbstractVectorFunction}
-
-    status::Symbol
-    num_iters::Int
-    num_cuts::Int
-    solve_time::Float64
-    obj_value::Float64
-    obj_bound::Float64
-
-    function SepCutsSolver(
-        approx_model::MOI.ModelLike,
-        con_sets::Vector{MOI.AbstractVectorSet},
-        con_funs::Vector{MOI.AbstractVectorFunction};
-        verbose::Bool = true,
-        tol_rel_opt = 1e-6,
-        tol_abs_opt = 1e-7,
-        tol_feas = 1e-7,
-        max_iters::Int = 500,
-        time_limit::Float64 = 3e2,
-        )
-        solver = new()
-
-        solver.verbose = verbose
-        solver.tol_rel_opt = tol_rel_opt
-        solver.tol_abs_opt = tol_abs_opt
-        solver.tol_feas = tol_feas
-        solver.max_iters = max_iters
-        solver.time_limit = time_limit
-
-        solver.approx_model = approx_model
-        solver.con_sets = con_sets
-        solver.con_funs = con_funs
-
-        solver.status = :SolveNotCalled
-        solver.num_iters = 0
-        solver.num_cuts = 0
-        solver.solve_time = NaN
-        solver.obj_value = NaN
-        solver.obj_bound = NaN
-
-        return solver
-    end
-end
-
-function solve(solver::SepCutsSolver)
+# TODO use SAF,VAF, and abbrevs for ScalarAffineTerm etc
+function MOI.optimize!(opt::Optimizer)
     solver.status = :SolveCalled
     start_time = time()
 
@@ -67,7 +12,7 @@ function solve(solver::SepCutsSolver)
         con_set = solver.con_sets[k]
         con_fun = solver.con_funs[k]
 
-        cuts = Aspasia.get_init_cuts(con_set)
+        cuts = Cuts.get_init_cuts(con_set)
         for cut in cuts
             if con_fun isa MOI.VectorOfVariables
                 cut_terms = MOI.ScalarAffineTerm.(cut, con_fun.variables)
@@ -79,7 +24,7 @@ function solve(solver::SepCutsSolver)
             end
 
             cut_expr = MOI.ScalarAffineFunction(cut_terms, 0.0)
-            cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(-cut_constant))
+            cut_ref = MOI.add_constraint(solver.oa_model, cut_expr, MOI.GreaterThan(-cut_constant))
             # TODO store cut_ref with the constraint so can access values/duals
         end
 
@@ -95,21 +40,21 @@ function solve(solver::SepCutsSolver)
     end
 
     while true
-        MOI.optimize!(solver.approx_model)
+        MOI.optimize!(solver.oa_model)
 
-        approx_model_status = MOI.get(solver.approx_model, MOI.TerminationStatus())
-        if approx_model_status == MOI.OPTIMAL
-            solver.obj_bound = MOI.get(solver.approx_model, MOI.ObjectiveBound())
-        elseif approx_model_status == MOI.DUAL_INFEASIBLE
+        oa_model_status = MOI.get(solver.oa_model, MOI.TerminationStatus())
+        if oa_model_status == MOI.OPTIMAL
+            solver.obj_bound = MOI.get(solver.oa_model, MOI.ObjectiveBound())
+        elseif oa_model_status == MOI.DUAL_INFEASIBLE
             # TODO need to cut off the ray
-        elseif approx_model_status == MOI.INFEASIBLE
+        elseif oa_model_status == MOI.INFEASIBLE
             solver.verbose && println("infeasibility detected; terminating")
             solver.status = :PrimalInfeasible
             break
-        elseif approx_model_status == MOI.INFEASIBLE_OR_UNBOUNDED
-            @show approx_model_status
+        elseif oa_model_status == MOI.INFEASIBLE_OR_UNBOUNDED
+            @show oa_model_status
             # solver.verbose && println("infeasibility or unboundedness detected; terminating")
-            # solver.status = :ApproxSolverStatusNotHandled
+            # solver.status = :ApproxAlgorithmStatusNotHandled
             solver.verbose && println("LP solver returned infeasible or unbounded - we are assuming infeasibility, but we could be wrong")
             solver.status = :PrimalInfeasible
             break
@@ -143,10 +88,10 @@ function solve(solver::SepCutsSolver)
             con_set = solver.con_sets[k]
             con_fun = solver.con_funs[k]
             # TODO do not include constant if primal solution is a ray?
-            fun_val = MOIU.evalvariables(vi -> MOI.get(solver.approx_model, MOI.VariablePrimal(), vi), con_fun)
+            fun_val = MOIU.evalvariables(vi -> MOI.get(solver.oa_model, MOI.VariablePrimal(), vi), con_fun)
             @assert !any(isnan, fun_val)
 
-            cuts = Aspasia.get_sep_cuts(fun_val, con_set)
+            cuts = Cuts.get_sep_cuts(fun_val, con_set)
             for cut in cuts
                 if con_fun isa MOI.VectorOfVariables
                     cut_terms = MOI.ScalarAffineTerm.(cut, con_fun.variables)
@@ -158,7 +103,7 @@ function solve(solver::SepCutsSolver)
                 end
 
                 cut_expr = MOI.ScalarAffineFunction(cut_terms, 0.0)
-                cut_ref = MOI.add_constraint(solver.approx_model, cut_expr, MOI.GreaterThan(-cut_constant))
+                cut_ref = MOI.add_constraint(solver.oa_model, cut_expr, MOI.GreaterThan(-cut_constant))
                 # TODO store cut_ref with the constraint so can access values/duals
                 is_cut_off = true
             end
@@ -168,7 +113,7 @@ function solve(solver::SepCutsSolver)
         if !is_cut_off
             solver.verbose && println("no cuts were added; terminating")
             solver.status = :Optimal
-            solver.obj_value = MOI.get(solver.approx_model, MOI.ObjectiveValue())
+            solver.obj_value = MOI.get(solver.oa_model, MOI.ObjectiveValue())
             break
         end
 

@@ -1,19 +1,18 @@
-#=
-Copyright 2019, Chris Coey, Lea Kapelevich and contributors
-=#
-
+"""
+A Julia package for generic conic outer approximation methods.
+"""
 module Aspasia
 
-# submodules
-include("Solvers/Solvers.jl")
+using DocStringExtensions
+using Printf
 
-using LinearAlgebra
-using SparseArrays
+include("Cuts/Cuts.jl")
+
 import MathOptInterface
 const MOI = MathOptInterface
 const MOIU = MathOptInterface.Utilities
 
-include("MathOptInterface/cones.jl")
-include("MathOptInterface/wrapper.jl")
+include("wrapper.jl")
+include("optimize.jl")
 
 end
