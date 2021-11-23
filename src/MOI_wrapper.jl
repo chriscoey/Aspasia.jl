@@ -1,6 +1,4 @@
-#=
-MathOptInterface wrapper of Aspasia solver
-=#
+# MathOptInterface wrapper of Aspasia solver
 
 # supported sets needing outer approximation
 const ApproxSet = Union{MOI.SecondOrderCone, MOI.PositiveSemidefiniteConeTriangle}

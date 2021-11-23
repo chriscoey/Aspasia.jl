@@ -1,9 +1,6 @@
-"""
-A Julia package for generic conic outer approximation methods.
-"""
+# A Julia package for generic conic outer approximation methods
 module Aspasia
 
-using DocStringExtensions
 using Printf
 
 include("Cuts/Cuts.jl")

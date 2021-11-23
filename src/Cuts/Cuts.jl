@@ -1,9 +1,6 @@
-"""
-Cut oracles for MathOptInterface cones.
-"""
+# Cut oracles for MathOptInterface cones
 module Cuts
 
-using DocStringExtensions
 using LinearAlgebra
 import LinearAlgebra.copytri!
 

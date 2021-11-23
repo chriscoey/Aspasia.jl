@@ -1,12 +1,5 @@
-#=
-outer approximation algorithm
-=#
+# Outer approximation algorithm
 
-"""
-$(TYPEDEF)
-
-A MathOptInterface optimizer type for Aspasia.
-"""
 mutable struct Optimizer <: MOI.AbstractOptimizer
     verbose::Bool
     tol_feas::Float64

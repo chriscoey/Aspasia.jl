@@ -1,21 +1,21 @@
 name = "Aspasia"
 uuid = "51c77908-4dc3-11e9-0c72-cd24fbe21d96"
+repo = "https://github.com/chriscoey/Aspasia.jl.git"
 authors = ["Chris Coey <coey.chris@gmail.com>"]
 version = "0.0.0"
 
 [deps]
-DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-GLPK = "60bf3e95-4087-53dc-ae20-288a0d20c6a6"
-JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
-DocStringExtensions = "0.8"
 MathOptInterface = "0.10"
-JuMP = "0.22"
 julia = "1.6"
+
+[extras]
+GLPK = "60bf3e95-4087-53dc-ae20-288a0d20c6a6"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["GLPK", "Test"]
