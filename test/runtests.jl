@@ -17,7 +17,6 @@ oa_solver = MOI.OptimizerWithAttributes(
 config = MOI.Test.Config(
     atol = 1e-4,
     rtol = 1e-4,
-    optimal_status = MOI.LOCALLY_SOLVED,
     exclude = Any[
         # MOI.ConstraintPrimal,
         MOI.ConstraintDual,
@@ -39,27 +38,12 @@ opt = MOI.Utilities.CachingOptimizer(
 excludes = String[
     # not implemented:
     "test_attribute_SolverVersion",
-    # TODO Aspasia only returns LOCALLY_INFEASIBLE, not INFEASIBLE:
-    # see https://github.com/jump-dev/MathOptInterface.jl/issues/1671
-    "INFEASIBLE",
-    "test_solve_DualStatus_INFEASIBILITY_CERTIFICATE_",
     # invalid model:
     "test_constraint_ZeroOne_bounds_3",
     "test_linear_VectorAffineFunction_empty_row",
     # CachingOptimizer does not throw if optimizer not attached:
     "test_model_copy_to_UnsupportedAttribute",
     "test_model_copy_to_UnsupportedConstraint",
-    # # TODO ConstraintPrimal not supported, should use a fallback in future:
-    # # see https://github.com/jump-dev/MathOptInterface.jl/issues/1310
-    # "test_solve_result_index",
-    # "test_quadratic_constraint",
-    # "test_quadratic_nonconvex",
-    # "test_quadratic_nonhomogeneous",
-    # "test_linear_integration",
-    # "test_linear_integer",
-    # "test_linear_Semi",
-    # "test_linear_Interval_inactive",
-    # "test_linear_FEASIBILITY_SENSE",
 ]
 
 includes = String["test_conic_SecondOrderCone",]
