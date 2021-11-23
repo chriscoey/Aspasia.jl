@@ -1,10 +1,7 @@
-
 Copyright (c) 2021
 Chris Coey and contributors
 
-Aspasia.jl is licensed under the **[MIT License]**.
-
-[MIT License]: https://opensource.org/licenses/MIT
+Aspasia.jl is licensed under the **[MIT License](https://opensource.org/licenses/MIT)**.
 
     MIT License
 
