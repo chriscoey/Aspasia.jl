@@ -54,7 +54,9 @@ function MOI.supports_constraint(
     return MOI.supports_constraint(_oa_model(model), F, S)
 end
 
-MOI.supports_constraint(::Optimizer, ::Type{<:Union{VV, VAF}}, ::Type{<:ApproxSet}) = true
+# NOTE slack bridge should handle VAF in cone
+# MOI.supports_constraint(::Optimizer, ::Type{<:Union{VV, VAF}}, ::Type{<:ApproxSet}) = true
+MOI.supports_constraint(::Optimizer, ::Type{VV}, ::Type{<:ApproxSet}) = true
 
 MOI.add_variable(model::Optimizer) = MOI.add_variable(_oa_model(model))
 
@@ -67,7 +69,7 @@ function MOI.add_constraint(
         return MOI.add_constraint(_oa_model(model), func, set)
     end
     # store for outer approximation
-    push!(model.con_funs, func)
+    push!(model.con_vars, func.variables)
     push!(model.con_sets, set)
     println("\napprox set\n")
     return #TODO
