@@ -31,10 +31,10 @@ function get_init_cuts(cone::MOI.PositiveSemidefiniteConeTriangle)
 end
 
 function get_sep_cuts(
-    x::Vector{Float64}, 
+    x::Vector{Float64},
     cone::MOI.PositiveSemidefiniteConeTriangle,
     tol::Float64,
-    )
+)
     cuts = Vector{Float64}[]
     L = cone.side_dimension
     X = Matrix{Float64}(undef, L, L)

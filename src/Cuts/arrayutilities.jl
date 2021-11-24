@@ -29,4 +29,6 @@ end
 # vec_to_mat_idx(k::Int) = div(1 + isqrt(8 * k - 7), 2)
 
 # get lower triangle vector index from (i,j) index in symmetric matrix
-mat_to_vec_idx(i::Int, j::Int) = (i < j) ? (div((j - 1) * j, 2) + i) : (div((i - 1) * i, 2) + j)
+function mat_to_vec_idx(i::Int, j::Int)
+    return (i < j) ? (div((j - 1) * j, 2) + i) : (div((i - 1) * i, 2) + j)
+end

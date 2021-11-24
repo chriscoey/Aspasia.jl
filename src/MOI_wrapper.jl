@@ -1,8 +1,5 @@
 # MathOptInterface wrapper of Aspasia solver
 
-# supported sets needing outer approximation
-const ApproxSet = Union{MOI.SecondOrderCone, MOI.PositiveSemidefiniteConeTriangle}
-
 const DiscreteSet = Union{MOI.Integer, MOI.ZeroOne, MOI.Semiinteger{Float64}}
 
 function _oa_opt(opt::Optimizer)
