@@ -8,6 +8,7 @@ import MathOptInterface
 const MOI = MathOptInterface
 const MOIU = MathOptInterface.Utilities
 
+include("arrayutilities.jl")
 include("secondordercone.jl")
 include("positivesemidefiniteconetriangle.jl")
 

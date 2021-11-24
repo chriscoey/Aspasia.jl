@@ -26,18 +26,22 @@ function get_init_cuts(cone::MOI.SecondOrderCone)
     return cuts
 end
 
-function get_sep_cuts(x::Vector{Float64}, cone::MOI.SecondOrderCone)
+function get_sep_cuts(
+    x::Vector{Float64}, 
+    cone::MOI.SecondOrderCone,
+    tol::Float64,
+    )
     dim = MOI.dimension(cone)
     y_norm = norm(x[i] for i in 2:dim)
 
-    if y_norm - x[1] > 1e-7
+    if y_norm - x[1] > 0.1 * tol
         cut = similar(x)
         cut[1] = 1
         for i in 2:dim
             cut[i] = -x[i] / y_norm
         end
 
-        if dot(x, cut) < -1e-6 # TODO tolerance option
+        if dot(x, cut) < -tol # TODO tolerance option
             return [cut]
         end
     end

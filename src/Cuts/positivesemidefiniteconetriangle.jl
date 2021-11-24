@@ -30,25 +30,30 @@ function get_init_cuts(cone::MOI.PositiveSemidefiniteConeTriangle)
     return cuts
 end
 
-function get_sep_cuts(x::Vector{Float64}, cone::MOI.PositiveSemidefiniteConeTriangle)
+function get_sep_cuts(
+    x::Vector{Float64}, 
+    cone::MOI.PositiveSemidefiniteConeTriangle,
+    tol::Float64,
+    )
     cuts = Vector{Float64}[]
     L = cone.side_dimension
     X = Matrix{Float64}(undef, L, L)
     vec_to_mat_noscale!(X, x)
 
-    F = eigen!(Symmetric(X, :L), 1:min(L, 5)) # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+    # TODO try only getting negative eigenvalues (what lower bound?) vs smallest k eigenvalues
+    F = eigen!(Symmetric(X, :L), 1:min(L, 5))
 
     for k in eachindex(F.values)
-        if F.values[k] >= -1e-7 # TODO tolerance option
+        if F.values[k] >= -0.1 * tol
             continue
         end
 
         V = F.vectors[:, k]
-        W = V * V' # TODO syrk
+        W = V * V'
         cut = similar(x)
         mat_to_vec_scale!(cut, W)
 
-        if dot(x, cut) < -1e-6 # TODO tolerance option
+        if dot(x, cut) < -tol
             push!(cuts, cut)
         end
     end

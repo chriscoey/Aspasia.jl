@@ -9,14 +9,14 @@ import Aspasia
 import GLPK
 oa_solver = MOI.OptimizerWithAttributes(
     GLPK.Optimizer,
-    "msg_lev" => 0,
+    "msg_lev" => 1,
     "tol_int" => 1e-9,
-    "tol_bnd" => 1e-7,
+    "tol_bnd" => 1e-9,
     "mip_gap" => 0.0,
 )
 config = MOI.Test.Config(
-    atol = 1e-4,
-    rtol = 1e-4,
+    atol = 1e-3,
+    rtol = 1e-3,
     exclude = Any[
         # MOI.ConstraintPrimal,
         MOI.ConstraintDual,
@@ -46,7 +46,10 @@ excludes = String[
     "test_model_copy_to_UnsupportedConstraint",
 ]
 
-includes = String["test_conic_SecondOrderCone",]
+includes = String[
+    "test_conic_SecondOrderCone",
+    "test_conic_PositiveSemidefiniteCone",
+    ]
 
 MOI.Test.runtests(
     opt,
